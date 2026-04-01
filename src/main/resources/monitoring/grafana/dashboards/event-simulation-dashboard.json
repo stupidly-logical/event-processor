@@ -1,0 +1,88 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "graphTooltip": 0,
+  "panels": [
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "targets": [
+        { "expr": "rate(pubsub_published_total[1m])", "legendFormat": "published/sec" },
+        { "expr": "rate(pubsub_publish_failures_total[1m])", "legendFormat": "failed/sec" }
+      ],
+      "title": "PubSub Publish Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "targets": [
+        { "expr": "circuit_breaker_state_code", "legendFormat": "cb-state" },
+        { "expr": "dlq_depth", "legendFormat": "dlq-depth" }
+      ],
+      "title": "Circuit Breaker and DLQ",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "targets": [
+        { "expr": "rate(pubsub_duplicate_deliveries_total[1m])", "legendFormat": "duplicate-deliveries/sec" },
+        { "expr": "rate(dataflow_duplicates_caught_total[1m])", "legendFormat": "dataflow-caught/sec" }
+      ],
+      "title": "Duplicate Burst Visibility",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "targets": [
+        { "expr": "redis_dedup_hits_total", "legendFormat": "redis-hits" },
+        { "expr": "redis_dedup_misses_total", "legendFormat": "redis-misses" },
+        { "expr": "redis_dedup_evictions_total", "legendFormat": "redis-evictions" }
+      ],
+      "title": "Redis Dedup",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "targets": [
+        { "expr": "sum by (sink) (rate(sink_events_processed_total[1m]))", "legendFormat": "{{sink}}" }
+      ],
+      "title": "Sink Throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "targets": [
+        { "expr": "pubsub_failure_rate_percent", "legendFormat": "failure-rate" },
+        { "expr": "pubsub_redelivery_percent", "legendFormat": "redelivery-rate" }
+      ],
+      "title": "Scenario Controls",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 39,
+  "style": "dark",
+  "tags": ["event-simulation"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "title": "Event Publishing Simulation",
+  "version": 1
+}
