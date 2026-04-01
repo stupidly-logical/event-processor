@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Event Publishing System — Live Simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+/* ─── Base ───────────────────────────────────────────────── */
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,monospace;background:#0d1117;color:#e6edf3;min-height:100vh;font-size:13px}
+h1{font-size:1.2rem;font-weight:600;letter-spacing:.5px}
+h2{font-size:.85rem;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:#8b949e;margin-bottom:8px}
+
+/* ─── Layout ─────────────────────────────────────────────── */
+.app{display:flex;flex-direction:column;gap:12px;padding:14px;max-width:1600px;margin:0 auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;
+        background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 16px}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.metric-row{display:grid;grid-template-columns:repeat(6,1fr);gap:10px}
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.chart-card{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}
+.chart-card canvas{max-height:200px}
+.bottom-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+/* ─── Metric cards ───────────────────────────────────────── */
+.metric{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 14px;
+        display:flex;flex-direction:column;gap:4px}
+.metric-label{font-size:.7rem;color:#8b949e;text-transform:uppercase;letter-spacing:.8px}
+.metric-value{font-size:1.5rem;font-weight:700;font-family:monospace;color:#58a6ff}
+.metric-sub{font-size:.7rem;color:#8b949e}
+
+/* ─── Buttons ────────────────────────────────────────────── */
+btn,.btn{display:inline-flex;align-items:center;gap:5px;border:1px solid #30363d;
+         background:#21262d;color:#e6edf3;padding:5px 12px;border-radius:6px;
+         cursor:pointer;font-size:.78rem;font-family:inherit;transition:all .15s}
+.btn:hover{background:#30363d;border-color:#58a6ff}
+.btn.primary{background:#1f6feb;border-color:#388bfd;color:#fff}
+.btn.primary:hover{background:#388bfd}
+.btn.danger{background:#da3633;border-color:#f85149;color:#fff}
+.btn.danger:hover{background:#f85149}
+.btn.success{background:#238636;border-color:#3fb950;color:#fff}
+.btn.success:hover{background:#3fb950}
+.btn.active{background:#388bfd;border-color:#58a6ff;color:#fff}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+/* ─── CB state badge ─────────────────────────────────────── */
+.cb-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.75rem;
+          font-weight:700;letter-spacing:.5px;transition:all .3s}
+.cb-CLOSED{background:#1c3a1f;color:#3fb950;border:1px solid #2ea043}
+.cb-OPEN{background:#3d1b1b;color:#f85149;border:1px solid #da3633}
+.cb-HALF_OPEN{background:#3a2e00;color:#d29922;border:1px solid #9e6a03}
+
+/* ─── Event Log ──────────────────────────────────────────── */
+.log-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px;
+           display:flex;flex-direction:column;gap:8px}
+.log-filters{display:flex;gap:6px;flex-wrap:wrap}
+.log-filter{border:1px solid #30363d;background:#21262d;color:#8b949e;padding:3px 9px;
+            border-radius:14px;cursor:pointer;font-size:.72rem;transition:all .15s}
+.log-filter.active{color:#e6edf3;border-color:currentColor}
+.log-filter[data-comp="SDK"].active{color:#79c0ff;border-color:#79c0ff}
+.log-filter[data-comp="Redis"].active{color:#ffa657;border-color:#ffa657}
+.log-filter[data-comp="PubSub"].active{color:#a5d6ff;border-color:#a5d6ff}
+.log-filter[data-comp="CB"].active{color:#ff7b72;border-color:#ff7b72}
+.log-filter[data-comp="DLQ"].active{color:#d2a8ff;border-color:#d2a8ff}
+.log-filter[data-comp="DataFlow"].active{color:#56d364;border-color:#56d364}
+.log-filter[data-comp="Aggregator"].active{color:#e3b341;border-color:#e3b341}
+.log-body{height:220px;overflow-y:auto;font-size:.72rem;font-family:monospace;
+          display:flex;flex-direction:column;gap:2px}
+.log-entry{display:flex;gap:8px;padding:2px 4px;border-radius:3px;align-items:baseline}
+.log-entry:hover{background:#21262d}
+.log-time{color:#8b949e;min-width:42px;flex-shrink:0}
+.log-comp{min-width:64px;flex-shrink:0;font-weight:600}
+.log-msg{color:#c9d1d9;word-break:break-all}
+.log-comp-SDK{color:#79c0ff}
+.log-comp-Redis{color:#ffa657}
+.log-comp-PubSub{color:#a5d6ff}
+.log-comp-CB{color:#ff7b72}
+.log-comp-DLQ{color:#d2a8ff}
+.log-comp-DataFlow{color:#56d364}
+.log-comp-Aggregator{color:#e3b341}
+
+/* ─── Fault injection panel ──────────────────────────────── */
+.fault-panel{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:14px}
+.fault-controls{display:flex;flex-direction:column;gap:10px;margin-top:8px}
+.fault-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.fault-row label{color:#8b949e;font-size:.78rem;min-width:160px}
+input[type=range]{accent-color:#58a6ff;cursor:pointer;width:160px}
+.range-val{font-family:monospace;color:#58a6ff;min-width:38px}
+
+/* ─── Architecture notes ─────────────────────────────────── */
+.arch-panel{background:#161b22;border:1px solid #30363d;border-radius:8px}
+.arch-header{padding:12px 16px;cursor:pointer;display:flex;align-items:center;
+             justify-content:space-between;user-select:none}
+.arch-header:hover{background:#21262d}
+.arch-body{padding:0 16px 16px;display:grid;
+           grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.arch-body.collapsed{display:none}
+.arch-item{background:#21262d;border-radius:6px;padding:12px;border-left:3px solid #30363d}
+.arch-item h3{font-size:.78rem;font-weight:700;margin-bottom:4px;text-transform:uppercase;
+              letter-spacing:.5px}
+.arch-item p{font-size:.74rem;color:#8b949e;line-height:1.5}
+.arch-item.sdk{border-left-color:#79c0ff}
+.arch-item.redis{border-left-color:#ffa657}
+.arch-item.pubsub{border-left-color:#a5d6ff}
+.arch-item.cb{border-left-color:#ff7b72}
+.arch-item.dlq{border-left-color:#d2a8ff}
+.arch-item.dataflow{border-left-color:#56d364}
+.arch-item.aggregator{border-left-color:#e3b341}
+
+/* ─── Speed indicator ────────────────────────────────────── */
+.sim-status{font-size:.78rem;color:#8b949e}
+.sim-time{font-family:monospace;font-size:.85rem;color:#58a6ff;font-weight:600}
+.speed-btn.active{background:#1f6feb;border-color:#388bfd;color:#fff}
+
+/* ─── Scrollbar ──────────────────────────────────────────── */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:#161b22}
+::-webkit-scrollbar-thumb{background:#30363d;border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:#484f58}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ─── Top bar ─────────────────────────────────────────── -->
+  <div class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <h1>Event Publishing System</h1>
+      <span class="sim-status">Sim time: <span class="sim-time" id="simTimeLbl">0s</span></span>
+    </div>
+    <div class="controls">
+      <span style="font-size:.75rem;color:#8b949e">Scenario:</span>
+      <button class="btn" onclick="setScenario('happy',this)">Happy Path</button>
+      <button class="btn active" onclick="setScenario('outage',this)" id="scenOutage">PubSub Outage</button>
+      <button class="btn" onclick="setScenario('storm',this)">Duplicate Storm</button>
+      <div style="width:1px;height:20px;background:#30363d"></div>
+      <button class="btn primary" id="playBtn" onclick="togglePlay()">&#9654; Play</button>
+      <button class="btn" onclick="resetSim()">&#8635; Reset</button>
+      <span style="font-size:.75rem;color:#8b949e;margin-left:4px">Speed:</span>
+      <button class="btn speed-btn active" id="sp1" onclick="setSpeed(1)">1×</button>
+      <button class="btn speed-btn" id="sp2" onclick="setSpeed(2)">2×</button>
+      <button class="btn speed-btn" id="sp5" onclick="setSpeed(5)">5×</button>
+    </div>
+  </div>
+
+  <!-- ─── Metric cards ────────────────────────────────────── -->
+  <div class="metric-row">
+    <div class="metric">
+      <div class="metric-label">Events Published</div>
+      <div class="metric-value" id="mPublished">0</div>
+      <div class="metric-sub">total SDK publish calls</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Redis HITs</div>
+      <div class="metric-value" style="color:#ffa657" id="mHits">0</div>
+      <div class="metric-sub">dedup drops at layer 1</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Redis MISSes</div>
+      <div class="metric-value" style="color:#56d364" id="mMisses">0</div>
+      <div class="metric-sub">new events proceeded</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Circuit Breaker</div>
+      <div class="metric-value" id="mCbState" style="font-size:1rem;padding-top:4px">
+        <span class="cb-badge cb-CLOSED" id="cbBadge">CLOSED</span>
+      </div>
+      <div class="metric-sub" id="mCbRate">failure rate: 0%</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">DLQ Depth</div>
+      <div class="metric-value" style="color:#d2a8ff" id="mDlqDepth">0</div>
+      <div class="metric-sub" id="mDlqSub">enqueued: 0 | replayed: 0</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Aggregator Processed</div>
+      <div class="metric-value" style="color:#e3b341" id="mAggTotal">0</div>
+      <div class="metric-sub" id="mAggSub">billing/audit/analytics</div>
+    </div>
+  </div>
+
+  <!-- ─── Charts row 1 ────────────────────────────────────── -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h2>Event Throughput</h2>
+      <canvas id="chartThroughput"></canvas>
+    </div>
+    <div class="chart-card" id="cbChartCard">
+      <h2>Circuit Breaker — Failure Rate</h2>
+      <canvas id="chartCB"></canvas>
+    </div>
+  </div>
+
+  <!-- ─── Charts row 2 ────────────────────────────────────── -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h2>Redis Cache State</h2>
+      <canvas id="chartRedis"></canvas>
+    </div>
+    <div class="chart-card">
+      <h2>DLQ Depth Over Time</h2>
+      <canvas id="chartDLQ"></canvas>
+    </div>
+  </div>
+
+  <!-- ─── Bottom row: log + fault injection ───────────────── -->
+  <div class="bottom-row">
+    <div class="log-panel">
+      <h2>Event Log</h2>
+      <div class="log-filters" id="logFilters">
+        <span class="log-filter active" data-comp="ALL" onclick="toggleFilter('ALL')">ALL</span>
+        <span class="log-filter active" data-comp="SDK" onclick="toggleFilter('SDK')">SDK</span>
+        <span class="log-filter active" data-comp="Redis" onclick="toggleFilter('Redis')">Redis</span>
+        <span class="log-filter active" data-comp="PubSub" onclick="toggleFilter('PubSub')">PubSub</span>
+        <span class="log-filter active" data-comp="CB" onclick="toggleFilter('CB')">CB</span>
+        <span class="log-filter active" data-comp="DLQ" onclick="toggleFilter('DLQ')">DLQ</span>
+        <span class="log-filter active" data-comp="DataFlow" onclick="toggleFilter('DataFlow')">DataFlow</span>
+        <span class="log-filter active" data-comp="Aggregator" onclick="toggleFilter('Aggregator')">Aggregator</span>
+      </div>
+      <div class="log-body" id="logBody"></div>
+    </div>
+
+    <div class="fault-panel">
+      <h2>Fault Injection Controls</h2>
+      <div class="fault-controls">
+        <div class="fault-row">
+          <label>PubSub Failure Rate</label>
+          <input type="range" min="0" max="100" value="5" id="sliderFailRate"
+                 oninput="updateFailRate(this.value)">
+          <span class="range-val" id="failRateVal">5%</span>
+        </div>
+        <div class="fault-row">
+          <label>Redelivery Rate</label>
+          <input type="range" min="0" max="20" value="3" id="sliderRedeliver"
+                 oninput="updateRedeliver(this.value)">
+          <span class="range-val" id="redeliverVal">3%</span>
+        </div>
+        <div class="fault-row" style="gap:8px">
+          <button class="btn danger" onclick="injectDuplicateBurst()">Duplicate Burst (+50)</button>
+          <button class="btn success" onclick="triggerDLQReplay()">DLQ Replay</button>
+          <button class="btn" onclick="resetCB()">Reset CB → CLOSED</button>
+        </div>
+        <div class="fault-row">
+          <label style="min-width:auto;color:#56d364;font-size:.75rem" id="faultStatus">
+            No active fault
+          </label>
+        </div>
+        <div style="border-top:1px solid #30363d;padding-top:10px">
+          <div style="color:#8b949e;font-size:.75rem;margin-bottom:6px">Aggregator Sinks</div>
+          <div style="display:flex;gap:16px;font-family:monospace;font-size:.78rem">
+            <span>Billing: <b style="color:#58a6ff" id="sinkBilling">0</b></span>
+            <span>Audit: <b style="color:#56d364" id="sinkAudit">0</b></span>
+            <span>Analytics: <b style="color:#e3b341" id="sinkAnalytics">0</b></span>
+          </div>
+        </div>
+        <div style="border-top:1px solid #30363d;padding-top:10px">
+          <div style="color:#8b949e;font-size:.75rem;margin-bottom:6px">DataFlow Dedup Layer 2</div>
+          <div style="font-family:monospace;font-size:.78rem">
+            Caught: <b style="color:#56d364" id="dfCaught">0</b>
+            &nbsp;|&nbsp; Window keys: <b style="color:#8b949e" id="dfKeys">0</b>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Architecture Notes ──────────────────────────────── -->
+  <div class="arch-panel">
+    <div class="arch-header" onclick="toggleArch()">
+      <h2 style="margin:0">Architecture Notes — How Each Component Maps to Production</h2>
+      <span id="archArrow">▼</span>
+    </div>
+    <div class="arch-body collapsed" id="archBody">
+      <div class="arch-item sdk">
+        <h3>SDK / EventPublisher</h3>
+        <p>In production this is a client library (e.g. Java SDK) embedded in services. It generates a UUID per event, checks Redis for idempotency, uses a Circuit Breaker to avoid cascading calls to PubSub, and retries with exponential backoff. The real GCP Pub/Sub client does similar wrapping.</p>
+      </div>
+      <div class="arch-item redis">
+        <h3>Redis Dedup Cache</h3>
+        <p>A Redis SETNX with TTL is the canonical at-source dedup pattern: write the event UUID on first publish, check on subsequent attempts. TTL eviction prevents unbounded memory growth. In production you'd use Redis Cluster with a 5-minute TTL matching your expected retry window.</p>
+      </div>
+      <div class="arch-item pubsub">
+        <h3>Google Cloud Pub/Sub</h3>
+        <p>Pub/Sub guarantees at-least-once delivery — messages can be redelivered after an ack deadline. The simulated failure rate mirrors real outages (quota exhaustion, gRPC errors). In production the SDK calls projects.topics.publish and handles gRPC status codes to decide retry vs. DLQ.</p>
+      </div>
+      <div class="arch-item cb">
+        <h3>Circuit Breaker (Resilience4j)</h3>
+        <p>Wraps every outbound call to Pub/Sub. A count-based sliding window tracks recent outcomes; when the failure rate crosses 50% the breaker trips OPEN and rejects calls immediately (CallNotPermittedException), preventing thread exhaustion. HALF-OPEN probing validates recovery before reopening traffic.</p>
+      </div>
+      <div class="arch-item dlq">
+        <h3>Dead Letter Queue</h3>
+        <p>Captures events that either exhausted retries or were rejected by an OPEN circuit breaker. In GCP this is a separate Pub/Sub topic configured as the dead-letter-topic on the subscription. A background Cloud Function or worker periodically replays DLQ messages once the circuit closes.</p>
+      </div>
+      <div class="arch-item dataflow">
+        <h3>DataFlow Dedup (Layer 2)</h3>
+        <p>A windowed stateful DoFn in Cloud Dataflow maintains a UUID keyed state store with a 2-minute window. Any redeliveries that leaked past Redis (possible during failover or cache TTL edge cases) are caught here before reaching downstream consumers. This is the "defense in depth" dedup layer.</p>
+      </div>
+      <div class="arch-item aggregator">
+        <h3>Event Aggregator / Fan-out</h3>
+        <p>Clean events are fanned out to domain sinks — Billing, Audit, Analytics. In production this is a Pub/Sub subscription per sink or a Dataflow pipeline with multiple outputs. Each sink has independent consumer lag tracking via Cloud Monitoring to detect backpressure independently.</p>
+      </div>
+    </div>
+  </div>
+
+</div><!-- .app -->
+
+<script>
+'use strict';
+
+// ============================================================
+// DATASET — 200 realistic GitHub Archive events
+// Schema mirrors GHArchive: {id, type, actor, repo, payload, created_at}
+// Generated deterministically so the simulation is reproducible.
+// ============================================================
+
+const _REPOS = [
+  {id:1296269,name:'torvalds/linux'},    {id:1,name:'rails/rails'},
+  {id:2,name:'django/django'},           {id:3,name:'facebook/react'},
+  {id:4,name:'microsoft/vscode'},        {id:5,name:'golang/go'},
+  {id:6,name:'rust-lang/rust'},          {id:7,name:'kubernetes/kubernetes'},
+  {id:8,name:'docker/docker'},           {id:9,name:'vuejs/vue'},
+  {id:10,name:'angular/angular'},         {id:11,name:'tensorflow/tensorflow'},
+  {id:12,name:'hashicorp/terraform'},    {id:13,name:'grafana/grafana'},
+  {id:14,name:'elastic/elasticsearch'}, {id:15,name:'apache/kafka'},
+  {id:16,name:'redis/redis'},            {id:17,name:'vercel/next.js'},
+  {id:18,name:'expressjs/express'},      {id:19,name:'nestjs/nest'},
+];
+
+const _ACTORS = [
+  'torvalds','DHH','gvanrossum','addyosmani','sindresorhus',
+  'tj','yyx990803','antirez','fabpot','mojombo',
+  'defunkt','pjhyett','wycats','evanphx','jnewland',
+  'bmizerany','schacon','rtomayko','josevalim','tenderlove',
+];
+
+const _TYPES = ['PushEvent','PullRequestEvent','IssuesEvent','WatchEvent','ForkEvent','CreateEvent'];
+
+// Seeded RNG so dataset is always the same across resets
+function seededRng(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+
+function buildDataset() {
+  const rng = seededRng(42);
+  const events = [];
+  const baseMs = new Date('2015-01-01T15:00:00Z').getTime();
+  for (let i = 0; i < 200; i++) {
+    const type = _TYPES[Math.floor(rng() * _TYPES.length)];
+    const repo = _REPOS[Math.floor(rng() * _REPOS.length)];
+    const actor = _ACTORS[Math.floor(rng() * _ACTORS.length)];
+    const tsMs  = baseMs + Math.floor(rng() * 3600000);
+    let payload = {};
+    if (type === 'PushEvent') {
+      payload = {
+        push_id: 536888820 + i,
+        size: Math.floor(rng() * 10) + 1,
+        distinct_size: Math.floor(rng() * 5) + 1,
+        ref: 'refs/heads/' + ['main','master','develop','feature/'+i][Math.floor(rng()*4)],
+        head: Math.random().toString(16).slice(2, 10) + 'a3f',
+      };
+    } else if (type === 'PullRequestEvent') {
+      payload = {
+        action: ['opened','closed','reopened','synchronize'][Math.floor(rng()*4)],
+        number: Math.floor(rng() * 9000) + 100,
+        pull_request: {title: `Fix issue #${Math.floor(rng()*500)+1}`, state: 'open'},
+      };
+    } else if (type === 'IssuesEvent') {
+      payload = {
+        action: ['opened','closed','labeled','assigned'][Math.floor(rng()*4)],
+        issue: {number: Math.floor(rng()*2000)+1, title: `Bug: something broke in ${repo.name}`},
+      };
+    } else if (type === 'WatchEvent') {
+      payload = {action: 'started'};
+    } else if (type === 'ForkEvent') {
+      payload = {forkee: {full_name: `${actor}/${repo.name.split('/')[1]}`}};
+    } else {
+      payload = {
+        ref: ['main','feature/'+i,'v1.'+i][Math.floor(rng()*3)],
+        ref_type: ['branch','tag','repository'][Math.floor(rng()*3)],
+      };
+    }
+    events.push({
+      id: String(2489651620 + i),
+      type,
+      actor: {id: 100+i, login: actor, display_login: actor,
+              avatar_url: `https://avatars.githubusercontent.com/u/${100+i}`},
+      repo,
+      payload,
+      public: true,
+      created_at: new Date(tsMs).toISOString(),
+      _simScheduledAt: 0, // will be assigned by engine
+    });
+  }
+  return events;
+}
+
+const MASTER_DATASET = buildDataset();
+
+// ============================================================
+// COMPONENT 1 — Redis Dedup Cache (Layer 1)
+// In-memory TTL map mirroring Redis SETNX with TTL.
+// Real pattern: SET uuid "" EX 300 NX → returns OK on MISS, nil on HIT.
+// ============================================================
+class RedisCache {
+  constructor(ttl = 300) {
+    this.ttl = ttl;         // simulated seconds
+    this.store = new Map(); // uuid → {setAt: simTime}
+    this.hits = 0;
+    this.misses = 0;
+    this.evictions = 0;
+  }
+
+  // Returns true if uuid already exists (HIT = duplicate)
+  check(uuid, simTime) {
+    this._evict(simTime);
+    if (this.store.has(uuid)) {
+      this.hits++;
+      return true; // HIT
+    }
+    // MISS — record and proceed
+    this.store.set(uuid, {setAt: simTime});
+    this.misses++;
+    return false;
+  }
+
+  // Evict expired entries (called on each check)
+  _evict(simTime) {
+    for (const [k, v] of this.store) {
+      if (simTime - v.setAt > this.ttl) {
+        this.store.delete(k);
+        this.evictions++;
+      }
+    }
+  }
+
+  get size() { return this.store.size; }
+
+  reset() {
+    this.store.clear();
+    this.hits = 0; this.misses = 0; this.evictions = 0;
+  }
+}
+
+// ============================================================
+// COMPONENT 2 — Simulated PubSub
+// In-memory topic queue with configurable failure rate and
+// at-least-once redelivery semantics (3% redelivery by default).
+// ============================================================
+class PubSub {
+  constructor() {
+    this.failureRate = 0.05;       // 0–1 probability of publish failure
+    this.redeliveryRate = 0.03;    // probability of an extra redelivery
+    this.published = 0;
+    this.delivered = 0;
+    this.duplicateDeliveries = 0;
+    this._subscribers = [];        // fn(event, isRedeliver)
+  }
+
+  subscribe(fn) { this._subscribers.push(fn); }
+
+  // Attempt to publish an event. Returns true on success.
+  publish(event, simTime, scheduler) {
+    if (Math.random() < this.failureRate) return false;
+    this.published++;
+    // Deliver to all subscribers
+    this._deliver(event, false);
+    // Simulate at-least-once: randomly redeliver with 1–5s delay
+    if (Math.random() < this.redeliveryRate) {
+      const delay = Math.floor(Math.random() * 5) + 1;
+      scheduler(simTime + delay, () => {
+        this.duplicateDeliveries++;
+        this._deliver(event, true);
+      });
+    }
+    return true;
+  }
+
+  _deliver(event, isRedeliver) {
+    this.delivered++;
+    for (const fn of this._subscribers) fn(event, isRedeliver);
+  }
+
+  reset() {
+    this.failureRate = 0.05; this.redeliveryRate = 0.03;
+    this.published = 0; this.delivered = 0; this.duplicateDeliveries = 0;
+  }
+}
+
+// ============================================================
+// COMPONENT 3 — Circuit Breaker (Resilience4j-style)
+// States: CLOSED → OPEN → HALF_OPEN → CLOSED
+// Count-based sliding window, 20 calls, 50% failure threshold.
+// OPEN wait: 30 simulated seconds. HALF_OPEN probes: 3.
+// ============================================================
+class CircuitBreaker {
+  constructor() {
+    this.windowSize   = 20;
+    this.failureThreshold = 0.50;
+    this.openWaitTime = 30;   // simulated seconds
+    this.halfOpenMax  = 3;
+
+    this.state   = 'CLOSED';
+    this.window  = [];        // boolean array: true=success
+    this.openedAt = 0;
+    this.probeCount = 0;
+    this.probeOk    = 0;
+
+    this.rejected = 0;
+    this.totalCalls = 0;
+    this.totalFails = 0;
+    this.stateChanges = [];
+  }
+
+  // Returns false = CallNotPermittedException (CB OPEN)
+  allowRequest(simTime) {
+    if (this.state === 'CLOSED') return true;
+    if (this.state === 'OPEN') {
+      if (simTime - this.openedAt >= this.openWaitTime) {
+        this._transition('HALF_OPEN', simTime);
+        return true; // first probe allowed
+      }
+      this.rejected++;
+      return false;
+    }
+    if (this.state === 'HALF_OPEN') {
+      return this.probeCount < this.halfOpenMax;
+    }
+  }
+
+  recordResult(success, simTime) {
+    this.totalCalls++;
+    if (!success) this.totalFails++;
+
+    if (this.state === 'CLOSED') {
+      this.window.push(success);
+      if (this.window.length > this.windowSize) this.window.shift();
+      if (this.window.length >= this.windowSize && this._failRate() >= this.failureThreshold) {
+        this._transition('OPEN', simTime);
+      }
+    } else if (this.state === 'HALF_OPEN') {
+      this.probeCount++;
+      if (success) this.probeOk++;
+      if (!success) {
+        this._transition('OPEN', simTime); // any failure → back to OPEN
+      } else if (this.probeCount >= this.halfOpenMax) {
+        // All probes must succeed
+        this._transition(this.probeOk === this.halfOpenMax ? 'CLOSED' : 'OPEN', simTime);
+      }
+    }
+  }
+
+  forceClose(simTime) { this._transition('CLOSED', simTime); }
+
+  _failRate() {
+    if (!this.window.length) return 0;
+    return this.window.filter(r => !r).length / this.window.length;
+  }
+
+  currentFailRate() { return this._failRate(); }
+
+  _transition(newState, simTime) {
+    const prev = this.state;
+    this.state = newState;
+    if (newState === 'OPEN') this.openedAt = simTime;
+    if (newState === 'HALF_OPEN') { this.probeCount = 0; this.probeOk = 0; }
+    if (newState === 'CLOSED') { this.window = []; }
+    const ev = {from: prev, to: newState, at: simTime};
+    this.stateChanges.push(ev);
+    EventLog.push('CB', `${prev} → ${newState}`, ev, simTime);
+  }
+
+  reset() {
+    this.state = 'CLOSED'; this.window = []; this.openedAt = 0;
+    this.probeCount = 0; this.probeOk = 0;
+    this.rejected = 0; this.totalCalls = 0; this.totalFails = 0;
+    this.stateChanges = [];
+  }
+}
+
+// ============================================================
+// COMPONENT 4 — Dead Letter Queue
+// Bounded queue (max 500). Stores events that hit CB OPEN or
+// exceeded max retries. Background replayer re-submits when
+// circuit closes. Maps to GCP dead-letter-topic configuration.
+// ============================================================
+class DeadLetterQueue {
+  constructor(maxSize = 500) {
+    this.maxSize  = maxSize;
+    this.queue    = [];       // {event, reason, enqueuedAt, retries}
+    this.enqueued = 0;
+    this.replayed = 0;
+    this.permFailed = 0;
+  }
+
+  enqueue(event, reason, retries, simTime) {
+    if (this.queue.length >= this.maxSize) {
+      this.permFailed++;
+      EventLog.push('DLQ', `FULL — dropped ${event.id}`, {reason}, simTime);
+      return;
+    }
+    this.queue.push({event, reason, enqueuedAt: simTime, retries});
+    this.enqueued++;
+    EventLog.push('DLQ', `Enqueued ${event.id.slice(-6)}`, {reason, retries}, simTime);
+  }
+
+  // Replay up to `batch` entries; calls onReplay(entry) for each
+  replay(batch, onReplay, simTime) {
+    const toReplay = this.queue.splice(0, batch);
+    for (const entry of toReplay) {
+      EventLog.push('DLQ', `Replaying ${entry.event.id.slice(-6)}`, {}, simTime);
+      onReplay(entry);
+      this.replayed++;
+    }
+  }
+
+  get depth() { return this.queue.length; }
+
+  reset() {
+    this.queue = []; this.enqueued = 0; this.replayed = 0; this.permFailed = 0;
+  }
+}
+
+// ============================================================
+// COMPONENT 5 — DataFlow Dedup (Layer 2)
+// Windowed UUID state store (120s window). Catches redeliveries
+// that Redis missed. Real counterpart: stateful Dataflow DoFn
+// with a ValueState keyed by UUID and a TimerSpec for cleanup.
+// ============================================================
+class DataFlowDedup {
+  constructor(windowSec = 120) {
+    this.window  = windowSec;
+    this.store   = new Map(); // uuid → firstSeenAt
+    this.caught  = 0;         // duplicates caught at this layer
+  }
+
+  // Returns true = duplicate (caught here)
+  check(uuid, simTime) {
+    // Evict expired entries
+    for (const [k, t] of this.store) {
+      if (simTime - t > this.window) this.store.delete(k);
+    }
+    if (this.store.has(uuid)) {
+      this.caught++;
+      return true;
+    }
+    this.store.set(uuid, simTime);
+    return false;
+  }
+
+  get size() { return this.store.size; }
+
+  reset() { this.store.clear(); this.caught = 0; }
+}
+
+// ============================================================
+// COMPONENT 6 — Event Aggregator
+// Fans clean events out to Billing, Audit, Analytics sinks.
+// In production: separate Pub/Sub subscriptions or Dataflow
+// outputs per sink, each with independent consumer lag metrics.
+// ============================================================
+class EventAggregator {
+  constructor() {
+    this.sinks = {billing: 0, audit: 0, analytics: 0};
+    this.total = 0;
+  }
+
+  process(event, simTime) {
+    this.total++;
+    this.sinks.billing++;
+    this.sinks.audit++;
+    this.sinks.analytics++;
+    EventLog.push('Aggregator', `Fanned out ${event.type}`, {repo: event.repo.name}, simTime);
+  }
+
+  reset() { this.sinks = {billing:0, audit:0, analytics:0}; this.total = 0; }
+}
+
+// ============================================================
+// COMPONENT 7 — EventPublisher (SDK)
+// Builder pattern: configures Redis, CB, PubSub references.
+// Attaches UUID, checks Redis, checks CB, publishes with retry.
+// Exponential backoff: base=2s, multiplier=2, jitter=±20%, max=5.
+// ============================================================
+class EventPublisher {
+  // Builder pattern
+  static builder() {
+    const cfg = {};
+    const b = {
+      withRedis: (r)   => { cfg.redis = r; return b; },
+      withPubSub: (p)  => { cfg.pubsub = p; return b; },
+      withCB: (c)      => { cfg.cb = c; return b; },
+      withDLQ: (d)     => { cfg.dlq = d; return b; },
+      withSim: (s)     => { cfg.sim = s; return b; },
+      build: ()        => new EventPublisher(cfg),
+    };
+    return b;
+  }
+
+  constructor(cfg) {
+    this.redis  = cfg.redis;
+    this.pubsub = cfg.pubsub;
+    this.cb     = cfg.cb;
+    this.dlq    = cfg.dlq;
+    this.sim    = cfg.sim;
+    this.published = 0;
+  }
+
+  publish(event) {
+    const simTime = this.sim.simTime;
+    // Attach UUID idempotency key
+    event.uuid = event.uuid || crypto.randomUUID();
+
+    // Layer 1 — Redis dedup check
+    const isHit = this.redis.check(event.uuid, simTime);
+    if (isHit) {
+      EventLog.push('Redis', `HIT — dropped ${event.uuid.slice(-8)}`, {type: event.type}, simTime);
+      return;
+    }
+    EventLog.push('Redis', `MISS — proceed ${event.uuid.slice(-8)}`, {type: event.type}, simTime);
+
+    this.published++;
+    this._publishWithRetry(event, 0, simTime);
+  }
+
+  _publishWithRetry(event, attempt, simTime) {
+    // Check Circuit Breaker
+    if (!this.cb.allowRequest(simTime)) {
+      this.dlq.enqueue(event, 'CB_OPEN', attempt, simTime);
+      EventLog.push('SDK', `CB OPEN → DLQ ${event.uuid.slice(-8)}`, {attempt}, simTime);
+      // Track DLQ-routed count for throughput chart
+      this.sim.m.dlqRouted[Math.min(Math.floor(simTime), 59)]++;
+      return;
+    }
+
+    // Attempt PubSub publish
+    const success = this.pubsub.publish(event, simTime,
+      (t, fn) => this.sim.scheduleAt(t, fn));
+    this.cb.recordResult(success, simTime);
+
+    if (success) {
+      EventLog.push('SDK', `Published ${event.type} (attempt ${attempt+1})`,
+        {repo: event.repo.name, uuid: event.uuid.slice(-8)}, simTime);
+      return;
+    }
+
+    // Failed — retry with backoff or DLQ
+    if (attempt >= 5) {
+      this.dlq.enqueue(event, 'MAX_RETRIES_EXCEEDED', attempt, simTime);
+      EventLog.push('SDK', `Max retries → DLQ ${event.uuid.slice(-8)}`, {attempt}, simTime);
+      // Track DLQ-routed count for throughput chart
+      this.sim.m.dlqRouted[Math.min(Math.floor(simTime), 59)]++;
+      return;
+    }
+
+    const delay = this._backoffDelay(attempt);
+    EventLog.push('SDK', `Retry ${attempt+1} in ${delay}s — ${event.uuid.slice(-8)}`,
+      {attempt}, simTime);
+    this.sim.scheduleAt(simTime + delay, () => {
+      this._publishWithRetry(event, attempt + 1, this.sim.simTime);
+    });
+  }
+
+  // Exponential backoff: base 2s × 2^attempt ± 20% jitter
+  _backoffDelay(attempt) {
+    const base   = 2 * Math.pow(2, attempt);          // 2,4,8,16,32
+    const jitter = base * 0.2 * (Math.random() * 2 - 1);
+    return Math.max(1, Math.round(base + jitter));
+  }
+
+  reset() { this.published = 0; }
+}
+
+// ============================================================
+// EVENT LOG — circular buffer, max 500 entries
+// ============================================================
+const EventLog = {
+  entries: [],
+  maxSize: 500,
+  push(component, message, meta, simTime) {
+    if (this.entries.length >= this.maxSize) this.entries.shift();
+    this.entries.push({component, message, meta, simTime: Math.floor(simTime), ts: Date.now()});
+  },
+  reset() { this.entries = []; },
+};
+
+// ============================================================
+// SIMULATION ENGINE
+// Drives the simulated clock and event feed. Maintains a
+// priority queue of future callbacks (for retries, redeliveries).
+// 1 real second = 10 simulated seconds at 1× speed.
+// ============================================================
+class SimulationEngine {
+  constructor() {
+    this.simTime      = 0;
+    this.simDuration  = 60;      // simulated seconds
+    this.speedMultiplier = 1;
+    this.running      = false;
+    this._intervalId  = null;
+    this._queue       = [];      // {at: simTime, fn: Function}
+    this._eventFeed   = [];      // queued dataset events
+    this._eventsPerSec = [];     // how many dataset events per sim-second
+    this._scenario    = 'outage';
+
+    // Component references (set by build())
+    this.redis = null; this.pubsub = null; this.cb = null;
+    this.dlq   = null; this.dataflow = null; this.aggregator = null;
+    this.publisher = null;
+
+    // Metrics for charts (indexed by simulated second 0..59)
+    this.m = {
+      published:    new Array(60).fill(0),
+      delivered:    new Array(60).fill(0),
+      deduped:      new Array(60).fill(0),
+      dlqRouted:    new Array(60).fill(0),
+      cbFailRate:   new Array(60).fill(0),
+      redisHits:    new Array(60).fill(0),
+      redisMisses:  new Array(60).fill(0),
+      cacheSize:    new Array(60).fill(0),
+      dlqEnqueued:  new Array(60).fill(0),
+      dlqDepth:     new Array(60).fill(0),
+    };
+    this._prevHits   = 0;
+    this._prevMisses = 0;
+    this._prevDlqEnq = 0;
+    this._prevDlqRep = 0;
+    this._prevDlqDep = 0;
+    this._prevPubCount = 0;
+    this._prevDelCount = 0;
+    // Track previous CB state so we can auto-trigger DLQ replay on CLOSED transition
+    this._prevCbState = 'CLOSED';
+  }
+
+  build() {
+    this.redis      = new RedisCache(300);
+    this.pubsub     = new PubSub();
+    this.cb         = new CircuitBreaker();
+    this.dlq        = new DeadLetterQueue(500);
+    this.dataflow   = new DataFlowDedup(120);
+    this.aggregator = new EventAggregator();
+
+    // PubSub subscriber → DataFlow → Aggregator
+    this.pubsub.subscribe((event, isRedeliver) => {
+      const t = this.simTime;
+      const isDup = this.dataflow.check(event.uuid, t);
+      if (isDup) {
+        EventLog.push('DataFlow', `Caught redeliver ${event.uuid.slice(-8)}`,
+          {isRedeliver}, t);
+        this.m.deduped[Math.min(Math.floor(t), 59)]++;
+        return;
+      }
+      this.aggregator.process(event, t);
+      this.m.delivered[Math.min(Math.floor(t), 59)]++;
+    });
+
+    this.publisher = EventPublisher.builder()
+      .withRedis(this.redis)
+      .withPubSub(this.pubsub)
+      .withCB(this.cb)
+      .withDLQ(this.dlq)
+      .withSim(this)
+      .build();
+
+    this._buildEventFeed();
+    this._applyScenario(this._scenario);
+    return this;
+  }
+
+  _buildEventFeed() {
+    // Distribute 200 events across 60 seconds
+    // Cluster slightly — Poisson-ish distribution
+    const rng = seededRng(7);
+    this._eventFeed = MASTER_DATASET.map((ev, i) => {
+      // Base spread across 55s (leave buffer), with small clusters
+      const t = rng() * 55;
+      return {...ev, uuid: crypto.randomUUID(), _simScheduledAt: t};
+    });
+    this._eventFeed.sort((a, b) => a._simScheduledAt - b._simScheduledAt);
+    this._feedIdx = 0;
+  }
+
+  _applyScenario(name) {
+    this._scenario = name;
+    this._faultTimeline = [];
+    if (name === 'outage') {
+      // t=10: PubSub failure jumps to 80%
+      // t=25: PubSub recovers (5%)
+      // t=40: burst of 50 duplicates
+      // t=55: DLQ replay
+      this._faultTimeline = [
+        {at: 10, fn: () => { this.pubsub.failureRate = 0.80; setFaultStatus('PubSub failure → 80%'); }},
+        {at: 25, fn: () => { this.pubsub.failureRate = 0.05; setFaultStatus('PubSub recovered → 5%'); }},
+        {at: 40, fn: () => { this._injectDuplicates(50); setFaultStatus('Duplicate burst +50'); }},
+        {at: 55, fn: () => { this._replayDLQ(); setFaultStatus('DLQ replay triggered'); }},
+      ];
+    } else if (name === 'happy') {
+      // Near-zero failure rate — CB stays CLOSED throughout
+      this.pubsub.failureRate = 0.005;
+      // No faults
+    } else if (name === 'storm') {
+      // 40% are duplicates; Redis + DataFlow stressed; 20% pubsub fail
+      this._faultTimeline = [
+        {at: 5,  fn: () => { this.pubsub.failureRate = 0.20; }},
+        {at: 10, fn: () => { this._injectDuplicates(80); }},
+        {at: 20, fn: () => { this._injectDuplicates(60); }},
+        {at: 30, fn: () => { this._injectDuplicates(60); setFaultStatus('Duplicate storm ongoing'); }},
+        {at: 45, fn: () => { this._replayDLQ(); }},
+      ];
+    }
+    // Schedule fault timeline
+    for (const f of this._faultTimeline) {
+      this.scheduleAt(f.at, f.fn);
+    }
+  }
+
+  scheduleAt(simTime, fn) {
+    this._queue.push({at: simTime, fn});
+    this._queue.sort((a, b) => a.at - b.at);
+  }
+
+  start() {
+    if (this.running) return;
+    this.running = true;
+    const tickMs = Math.round(100 / this.speedMultiplier);
+    this._intervalId = setInterval(() => this._tick(), tickMs);
+  }
+
+  pause() {
+    this.running = false;
+    clearInterval(this._intervalId);
+    this._intervalId = null;
+  }
+
+  _tick() {
+    const t = this.simTime;
+    if (t > this.simDuration) { this.pause(); return; }
+
+    // Process scheduled callbacks
+    while (this._queue.length && this._queue[0].at <= t) {
+      const {fn} = this._queue.shift();
+      try { fn(); } catch(e) { console.error(e); }
+    }
+
+    // Feed events scheduled at or before current simTime
+    while (this._feedIdx < this._eventFeed.length &&
+           this._eventFeed[this._feedIdx]._simScheduledAt <= t) {
+      const ev = this._eventFeed[this._feedIdx++];
+      const ti = Math.min(Math.floor(t), 59);
+      this.m.published[ti]++;
+      this.publisher.publish(ev);
+    }
+
+    // Track per-second delta metrics
+    const ti = Math.min(Math.floor(t), 59);
+    this.m.redisHits[ti]   = this.redis.hits - this._prevHits;
+    this.m.redisMisses[ti] = this.redis.misses - this._prevMisses;
+    this._prevHits   = this.redis.hits;
+    this._prevMisses = this.redis.misses;
+
+    const curDlqEnq = this.dlq.enqueued;
+    this.m.dlqEnqueued[ti] = curDlqEnq - this._prevDlqEnq;
+    this._prevDlqEnq = curDlqEnq;
+    this.m.dlqDepth[ti]   = this.dlq.depth;
+    this.m.cacheSize[ti]  = this.redis.size;
+    this.m.cbFailRate[ti] = +(this.cb.currentFailRate() * 100).toFixed(1);
+
+    // Auto-replay DLQ when CB transitions to CLOSED (background replayer behavior)
+    if (this._prevCbState !== 'CLOSED' && this.cb.state === 'CLOSED' && this.dlq.depth > 0) {
+      EventLog.push('DLQ', `Auto-replay — CB closed, depth: ${this.dlq.depth}`, {}, t);
+      // Stagger replays over next 3 sim-seconds so they don't all hit at once
+      const snapshot = this.dlq.queue.splice(0);
+      snapshot.forEach((entry, i) => {
+        this.scheduleAt(t + 1 + (i * 0.05), () => {
+          this.dlq.replayed++;
+          const ev = {...entry.event, uuid: crypto.randomUUID()};
+          EventLog.push('DLQ', `Replaying ${entry.event.id.slice(-6)}`, {reason: entry.reason}, this.simTime);
+          this.publisher._publishWithRetry(ev, 0, this.simTime);
+        });
+      });
+    }
+    this._prevCbState = this.cb.state;
+
+    this.simTime++;
+    updateDashboard();
+  }
+
+  _injectDuplicates(count) {
+    // Re-publish the first `count` events from the feed with their existing UUIDs
+    const t = this.simTime;
+    const src = this._eventFeed.slice(0, Math.min(count, this._eventFeed.length));
+    for (let i = 0; i < src.length; i++) {
+      // Stagger by 0.1s sim each so they don't all hit at once
+      this.scheduleAt(t + i * 0.1, () => {
+        const ev = {...src[i]}; // same uuid = will be caught by Redis
+        this.m.published[Math.min(Math.floor(this.simTime), 59)]++;
+        this.publisher.publish(ev);
+      });
+    }
+  }
+
+  _replayDLQ() {
+    const t = this.simTime;
+    EventLog.push('DLQ', `Replay triggered — depth: ${this.dlq.depth}`, {}, t);
+    this.dlq.replay(this.dlq.depth, (entry) => {
+      // Re-publish from DLQ — give new UUID so Redis doesn't block it
+      const ev = {...entry.event, uuid: crypto.randomUUID()};
+      this.publisher._publishWithRetry(ev, 0, this.simTime);
+    }, t);
+  }
+
+  reset() {
+    this.pause();
+    this.simTime = 0;
+    this._queue  = [];
+    this._feedIdx = 0;
+    EventLog.reset();
+    if (this.redis)      this.redis.reset();
+    if (this.pubsub)     this.pubsub.reset();
+    if (this.cb)         this.cb.reset();
+    if (this.dlq)        this.dlq.reset();
+    if (this.dataflow)   this.dataflow.reset();
+    if (this.aggregator) this.aggregator.reset();
+    if (this.publisher)  this.publisher.reset();
+    this.m = {
+      published:  new Array(60).fill(0),
+      delivered:  new Array(60).fill(0),
+      deduped:    new Array(60).fill(0),
+      dlqRouted:  new Array(60).fill(0),
+      cbFailRate: new Array(60).fill(0),
+      redisHits:  new Array(60).fill(0),
+      redisMisses:new Array(60).fill(0),
+      cacheSize:  new Array(60).fill(0),
+      dlqEnqueued:new Array(60).fill(0),
+      dlqDepth:   new Array(60).fill(0),
+    };
+    this._prevHits   = 0; this._prevMisses = 0;
+    this._prevDlqEnq = 0; this._prevDlqRep = 0;
+    this._prevDlqDep = 0; this._prevPubCount = 0; this._prevDelCount = 0;
+    this._prevCbState = 'CLOSED';
+    // Rebuild feed and scenario (preserves scenario choice)
+    this._buildEventFeed();
+    this._applyScenario(this._scenario);
+  }
+}
+
+// ============================================================
+// CHARTS — initialized once, updated each tick
+// ============================================================
+const LABELS = Array.from({length: 60}, (_, i) => `${i}s`);
+// Exposed on window so devtools / eval can inspect chart state
+window.charts = {};
+let charts = window.charts;
+
+const CHART_DEFAULTS = {
+  responsive: true,
+  maintainAspectRatio: true,
+  animation: {duration: 0},
+  interaction: {mode: 'index', intersect: false},
+  plugins: {legend: {labels: {color: '#8b949e', font: {size: 11}}}},
+  scales: {
+    x: {ticks: {color: '#8b949e', maxTicksLimit: 12, font: {size: 10}},
+        grid: {color: '#21262d'}},
+    y: {ticks: {color: '#8b949e', font: {size: 10}},
+        grid: {color: '#21262d'}, beginAtZero: true},
+  },
+};
+
+function initCharts() {
+  // Destroy existing charts
+  for (const c of Object.values(charts)) { try { c.destroy(); } catch(e) {} }
+  // Re-point both references so they stay in sync after re-init
+  window.charts = {};
+  charts = window.charts;
+
+  // Chart 1 — Throughput
+  charts.throughput = new Chart(document.getElementById('chartThroughput'), {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: [
+        {label: 'Published',    data: [], borderColor: '#58a6ff', backgroundColor: 'rgba(88,166,255,.1)', fill: true, tension: .3, pointRadius: 0},
+        {label: 'Delivered',    data: [], borderColor: '#3fb950', backgroundColor: 'rgba(63,185,80,.1)',  fill: true, tension: .3, pointRadius: 0},
+        {label: 'Deduplicated', data: [], borderColor: '#ffa657', backgroundColor: 'rgba(255,166,87,.08)',fill: true, tension: .3, pointRadius: 0},
+        {label: 'DLQ Routed',   data: [], borderColor: '#d2a8ff', backgroundColor: 'rgba(210,168,255,.08)',fill: true, tension: .3, pointRadius: 0},
+      ],
+    },
+    options: {...CHART_DEFAULTS},
+  });
+
+  // Chart 2 — CB failure rate
+  charts.cb = new Chart(document.getElementById('chartCB'), {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: [
+        {label: 'Failure Rate %', data: [], borderColor: '#ff7b72', backgroundColor: 'rgba(255,123,114,.1)', fill: true, tension: .3, pointRadius: 0},
+        {label: '50% Threshold',  data: new Array(60).fill(50), borderColor: '#484f58', borderDash: [4,4], pointRadius: 0, fill: false},
+      ],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      scales: {
+        ...CHART_DEFAULTS.scales,
+        y: {...CHART_DEFAULTS.scales.y, max: 100,
+            ticks: {color:'#8b949e', font:{size:10}, callback: v => v + '%'}},
+      },
+    },
+  });
+
+  // Chart 3 — Redis state (stacked bar + line for size)
+  charts.redis = new Chart(document.getElementById('chartRedis'), {
+    type: 'bar',
+    data: {
+      labels: LABELS,
+      datasets: [
+        {label: 'Hits (deduped)',  data: [], backgroundColor: 'rgba(255,166,87,.7)', stack: 'redis'},
+        {label: 'Misses (new)',    data: [], backgroundColor: 'rgba(63,185,80,.6)',  stack: 'redis'},
+        {label: 'Cache Size',      data: [], type: 'line', borderColor: '#58a6ff',
+         backgroundColor: 'transparent', pointRadius: 0, tension: .3, yAxisID: 'y2'},
+      ],
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      scales: {
+        // Both axes must declare stacked:true for mixed bar+line stacked charts in Chart.js 4
+        x:  {stacked: true, ticks: {color:'#8b949e', maxTicksLimit:12, font:{size:10}}, grid: {color:'#21262d'}},
+        y:  {stacked: true, ticks: {color:'#8b949e', font:{size:10}}, grid: {color:'#21262d'}, beginAtZero: true},
+        y2: {position: 'right', ticks: {color:'#58a6ff', font:{size:10}}, grid: {drawOnChartArea:false}, beginAtZero: true},
+      },
+    },
+  });
+
+  // Chart 4 — DLQ depth (area + enqueue/replay lines)
+  charts.dlq = new Chart(document.getElementById('chartDLQ'), {
+    type: 'line',
+    data: {
+      labels: LABELS,
+      datasets: [
+        {label: 'DLQ Depth',    data: [], borderColor: '#d2a8ff', backgroundColor: 'rgba(210,168,255,.2)', fill: true, tension: .3, pointRadius: 0},
+        {label: 'Enqueue Rate', data: [], borderColor: '#f85149', backgroundColor: 'transparent', tension: .3, pointRadius: 0},
+      ],
+    },
+    options: {...CHART_DEFAULTS},
+  });
+}
+
+// ============================================================
+// DASHBOARD — update functions called every sim tick
+// ============================================================
+let logFilters = new Set(['ALL','SDK','Redis','PubSub','CB','DLQ','DataFlow','Aggregator']);
+let _logScrollLocked = false;
+
+function updateDashboard() {
+  const sim = window._sim;
+  if (!sim) return;
+  const t = Math.min(Math.floor(sim.simTime), 59);
+
+  // ── Metric cards ──────────────────────────────────────────
+  document.getElementById('simTimeLbl').textContent  = sim.simTime + 's / 60s';
+  document.getElementById('mPublished').textContent  = sim.redis.hits + sim.redis.misses;
+  document.getElementById('mHits').textContent       = sim.redis.hits;
+  document.getElementById('mMisses').textContent     = sim.redis.misses;
+  document.getElementById('mAggTotal').textContent   = sim.aggregator.total;
+  document.getElementById('mDlqDepth').textContent   = sim.dlq.depth;
+  document.getElementById('mDlqSub').textContent     = `enqueued: ${sim.dlq.enqueued} | replayed: ${sim.dlq.replayed}`;
+  document.getElementById('mAggSub').textContent     =
+    `B:${sim.aggregator.sinks.billing} A:${sim.aggregator.sinks.audit} An:${sim.aggregator.sinks.analytics}`;
+
+  // CB badge
+  const badge = document.getElementById('cbBadge');
+  badge.textContent = sim.cb.state;
+  badge.className   = 'cb-badge cb-' + sim.cb.state;
+  document.getElementById('mCbRate').textContent =
+    'failure rate: ' + (sim.cb.currentFailRate() * 100).toFixed(0) + '%';
+
+  // CB chart card background
+  const cbCard = document.getElementById('cbChartCard');
+  if (sim.cb.state === 'OPEN')      cbCard.style.background = 'rgba(218,54,51,.08)';
+  else if (sim.cb.state === 'HALF_OPEN') cbCard.style.background = 'rgba(158,106,3,.08)';
+  else cbCard.style.background = '';
+
+  // Sink counters
+  document.getElementById('sinkBilling').textContent   = sim.aggregator.sinks.billing;
+  document.getElementById('sinkAudit').textContent     = sim.aggregator.sinks.audit;
+  document.getElementById('sinkAnalytics').textContent = sim.aggregator.sinks.analytics;
+
+  // DataFlow
+  document.getElementById('dfCaught').textContent = sim.dataflow.caught;
+  document.getElementById('dfKeys').textContent   = sim.dataflow.size;
+
+  // ── Charts ─────────────────────────────────────────────────
+  // Build arrays up to current tick
+  const tLen = Math.min(t + 1, 60);
+
+  const ds = charts.throughput.data.datasets;
+  ds[0].data = sim.m.published.slice(0, tLen);
+  ds[1].data = sim.m.delivered.slice(0, tLen);
+  ds[2].data = sim.m.deduped.slice(0, tLen);
+  ds[3].data = sim.m.dlqRouted.slice(0, tLen);
+  charts.throughput.update('none');
+
+  charts.cb.data.datasets[0].data = sim.m.cbFailRate.slice(0, tLen);
+  charts.cb.update('none');
+
+  const rds = charts.redis.data.datasets;
+  rds[0].data = sim.m.redisHits.slice(0, tLen);
+  rds[1].data = sim.m.redisMisses.slice(0, tLen);
+  rds[2].data = sim.m.cacheSize.slice(0, tLen);
+  charts.redis.update('none');
+
+  const dds = charts.dlq.data.datasets;
+  dds[0].data = sim.m.dlqDepth.slice(0, tLen);
+  dds[1].data = sim.m.dlqEnqueued.slice(0, tLen);
+  charts.dlq.update('none');
+
+  // ── Event log ──────────────────────────────────────────────
+  renderLog();
+}
+
+function renderLog() {
+  const body   = document.getElementById('logBody');
+  const all    = logFilters.has('ALL');
+  const active = logFilters;
+  const entries = EventLog.entries.slice(-50).filter(e =>
+    all || active.has(e.component)).reverse();
+
+  body.innerHTML = entries.map(e => `
+    <div class="log-entry">
+      <span class="log-time">${e.simTime}s</span>
+      <span class="log-comp log-comp-${e.component}">[${e.component}]</span>
+      <span class="log-msg">${escHtml(e.message)}</span>
+    </div>`).join('');
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ============================================================
+// UI EVENT HANDLERS
+// ============================================================
+
+function togglePlay() {
+  const sim = window._sim;
+  const btn = document.getElementById('playBtn');
+  if (sim.running) {
+    sim.pause();
+    btn.innerHTML = '&#9654; Play';
+    btn.classList.remove('primary');
+  } else {
+    sim.start();
+    btn.innerHTML = '&#9646;&#9646; Pause';
+    btn.classList.add('primary');
+  }
+}
+
+function resetSim() {
+  const sim = window._sim;
+  sim.pause();
+  sim.reset();
+  document.getElementById('playBtn').innerHTML = '&#9654; Play';
+  document.getElementById('playBtn').classList.remove('primary');
+  // Reset chart data
+  for (const c of Object.values(charts)) {
+    for (const ds of c.data.datasets) ds.data = [];
+    c.update('none');
+  }
+  document.getElementById('simTimeLbl').textContent = '0s / 60s';
+  setFaultStatus('No active fault');
+  // Reset sliders
+  document.getElementById('sliderFailRate').value = 5;
+  document.getElementById('failRateVal').textContent = '5%';
+  renderLog();
+}
+
+function setSpeed(s) {
+  window._sim.speedMultiplier = s;
+  if (window._sim.running) {
+    window._sim.pause();
+    window._sim.start();
+  }
+  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('sp' + s).classList.add('active');
+}
+
+function setScenario(name, btn) {
+  const sim = window._sim;
+  sim._scenario = name;
+  resetSim();
+  // Highlight the clicked scenario button, clear others
+  document.querySelectorAll('.controls .btn:not(.primary):not(.speed-btn)').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  // Sync failure-rate slider to the scenario's initial value
+  const initRate = name === 'happy' ? 1 : name === 'storm' ? 5 : 5;
+  document.getElementById('sliderFailRate').value = initRate;
+  document.getElementById('failRateVal').textContent = initRate + '%';
+}
+
+function toggleFilter(comp) {
+  const el = document.querySelector(`.log-filter[data-comp="${comp}"]`);
+  if (comp === 'ALL') {
+    const allOn = logFilters.has('ALL');
+    if (allOn) {
+      logFilters = new Set();
+      el.classList.remove('active');
+    } else {
+      logFilters = new Set(['ALL','SDK','Redis','PubSub','CB','DLQ','DataFlow','Aggregator']);
+      document.querySelectorAll('.log-filter').forEach(f => f.classList.add('active'));
+    }
+  } else {
+    logFilters.delete('ALL');
+    document.querySelector('.log-filter[data-comp="ALL"]').classList.remove('active');
+    if (logFilters.has(comp)) {
+      logFilters.delete(comp);
+      el.classList.remove('active');
+    } else {
+      logFilters.add(comp);
+      el.classList.add('active');
+    }
+  }
+  renderLog();
+}
+
+function updateFailRate(val) {
+  document.getElementById('failRateVal').textContent = val + '%';
+  if (window._sim && window._sim.pubsub) {
+    window._sim.pubsub.failureRate = val / 100;
+    setFaultStatus(`PubSub failure rate manually set to ${val}%`);
+  }
+}
+
+function updateRedeliver(val) {
+  document.getElementById('redeliverVal').textContent = val + '%';
+  if (window._sim && window._sim.pubsub) {
+    window._sim.pubsub.redeliveryRate = val / 100;
+  }
+}
+
+function injectDuplicateBurst() {
+  if (window._sim) {
+    window._sim._injectDuplicates(50);
+    setFaultStatus('Manual duplicate burst +50 injected');
+  }
+}
+
+function triggerDLQReplay() {
+  if (window._sim) {
+    window._sim._replayDLQ();
+    setFaultStatus('Manual DLQ replay triggered');
+  }
+}
+
+function resetCB() {
+  if (window._sim) {
+    window._sim.cb.forceClose(window._sim.simTime);
+    setFaultStatus('CB manually reset to CLOSED');
+    updateDashboard();
+  }
+}
+
+function setFaultStatus(msg) {
+  document.getElementById('faultStatus').textContent = msg;
+}
+
+function toggleArch() {
+  const body  = document.getElementById('archBody');
+  const arrow = document.getElementById('archArrow');
+  body.classList.toggle('collapsed');
+  arrow.textContent = body.classList.contains('collapsed') ? '▼' : '▲';
+}
+
+// ============================================================
+// BOOTSTRAP
+// ============================================================
+window.addEventListener('DOMContentLoaded', () => {
+  initCharts();
+  window._sim = new SimulationEngine();
+  window._sim.build();
+  updateDashboard();
+});
+</script>
+</body>
+</html>
