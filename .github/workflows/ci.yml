@@ -1,0 +1,176 @@
+name: CI — Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: mvn clean package -DskipTests -B -q
+
+      - name: Run unit tests
+        run: mvn test -B
+
+      - name: Report test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results
+          path: '**/target/surefire-reports/TEST-*.xml'
+          reporter: java-junit
+
+      - name: Publish coverage report
+        uses: codecov/codecov-action@v3
+        if: always()
+        with:
+          files: '**/target/site/jacoco/index.html'
+          fail_ci_if_error: false
+          verbose: true
+
+  integration-test:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+
+      kafka:
+        image: confluentinc/cp-kafka:7.5.0
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+        options: >-
+          --health-cmd "kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 9092:9092
+
+      zookeeper:
+        image: confluentinc/cp-zookeeper:7.5.0
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+        ports:
+          - 2181:2181
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Wait for Kafka
+        run: |
+          timeout 120 bash -c 'until docker exec kafka kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 1; done'
+
+      - name: Run integration tests
+        run: mvn verify -Pintegration -B
+        env:
+          KAFKA_BROKERS: localhost:9092
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run checkstyle
+        run: mvn checkstyle:check -q
+
+      - name: Run spotbugs
+        run: mvn spotbugs:check -q
+
+      - name: SonarQube Scan
+        run: |
+          mvn sonar:sonar \
+            -Dsonar.projectKey=event-processor \
+            -Dsonar.sources=sdk,producer-service,consumer-service \
+            -Dsonar.java.binaries=target/classes \
+            -Dsonar.host.url=https://sonarcloud.io \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
+            -B -q
+        if: secrets.SONAR_TOKEN != ''
+
+  docker-build:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: github.event_name == 'push'
+
+    outputs:
+      producer-image: ${{ steps.docker-build.outputs.producer-image }}
+      consumer-image: ${{ steps.docker-build.outputs.consumer-image }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker images
+        id: docker-build
+        run: |
+          REPO="${{ secrets.DOCKER_REGISTRY }}/event-processor"
+          TAG="${{ github.sha }}"
+
+          docker build -f producer-service/Dockerfile -t $REPO/producer:$TAG producer-service/
+          docker build -f consumer-service/Dockerfile -t $REPO/consumer:$TAG consumer-service/
+
+          echo "producer-image=$REPO/producer:$TAG" >> $GITHUB_OUTPUT
+          echo "consumer-image=$REPO/consumer:$TAG" >> $GITHUB_OUTPUT
+        if: secrets.DOCKER_REGISTRY != ''

@@ -1,0 +1,206 @@
+name: Deploy — Production
+
+on:
+  push:
+    tags:
+      - 'v*'  # Tags matching v*
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests
+        run: mvn clean verify -B
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            sdk/target/sdk-*.jar
+            producer-service/target/producer-service-*.jar
+            consumer-service/target/consumer-service-*.jar
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-gcp:
+    name: Deploy to GCP
+    runs-on: ubuntu-latest
+    needs: [release]
+    if: startsWith(github.ref, 'refs/tags/')
+    timeout-minutes: 45
+    environment:
+      name: production
+      url: https://${{ steps.deploy.outputs.producer_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authenticate Docker to GCR
+        run: |
+          gcloud auth configure-docker ${{ secrets.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build artifacts
+        run: mvn clean package -Pprod -DskipTests -q
+
+      - name: Build and push Docker images
+        id: docker
+        env:
+          REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          REPO=$REGISTRY/$PROJECT_ID/event-processor
+
+          docker build -f producer-service/Dockerfile -t $REPO/producer:$TAG -t $REPO/producer:latest producer-service/
+          docker build -f consumer-service/Dockerfile -t $REPO/consumer:$TAG -t $REPO/consumer:latest consumer-service/
+
+          docker push $REPO/producer:$TAG
+          docker push $REPO/producer:latest
+          docker push $REPO/consumer:$TAG
+          docker push $REPO/consumer:latest
+
+          echo "producer_image=$REPO/producer:$TAG" >> $GITHUB_OUTPUT
+          echo "consumer_image=$REPO/consumer:$TAG" >> $GITHUB_OUTPUT
+
+      - name: Deploy with Terraform
+        id: deploy
+        env:
+          PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          REGION: ${{ secrets.GCP_REGION }}
+          ALERT_EMAIL: ${{ secrets.ALERT_EMAIL }}
+        run: |
+          cd infra/terraform
+
+          terraform init -no-color
+
+          terraform apply -no-color -auto-approve \
+            -var="project_id=$PROJECT_ID" \
+            -var="region=$REGION" \
+            -var="producer_service_image=${{ steps.docker.outputs.producer_image }}" \
+            -var="consumer_service_image=${{ steps.docker.outputs.consumer_image }}" \
+            -var="alert_email=$ALERT_EMAIL"
+
+          terraform output -raw producer_service_url > /tmp/producer_url
+          cat /tmp/producer_url >> $GITHUB_OUTPUT
+          echo "producer_url=$(cat /tmp/producer_url)" >> $GITHUB_OUTPUT
+
+      - name: Smoke test
+        run: |
+          PRODUCER_URL=${{ steps.deploy.outputs.producer_url }}
+
+          echo "Waiting for service to be ready..."
+          for i in {1..30}; do
+            if curl -f -s $PRODUCER_URL/actuator/health > /dev/null; then
+              echo "Service is healthy"
+              exit 0
+            fi
+            echo "Attempt $i/30..."
+            sleep 10
+          done
+
+          echo "Service did not become healthy"
+          exit 1
+
+      - name: Post deployment metrics
+        if: always()
+        run: |
+          gcloud logging write event-processor-deployment \
+            "Deployment completed for ${{ github.ref_name }}" \
+            --severity=NOTICE \
+            --resource=global \
+            --labels=version=${{ github.ref_name }},status=${{ job.status }}
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [deploy-gcp]
+    if: always()
+
+    steps:
+      - name: Slack notification
+        if: secrets.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "Deployment ${{ needs.deploy-gcp.result }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ needs.deploy-gcp.result == 'success' && '✅' || '❌' }} Event Processor Deployment"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Version:* ${{ github.ref_name }}\n*Status:* ${{ needs.deploy-gcp.result }}\n*Triggered by:* ${{ github.actor }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Logs"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
