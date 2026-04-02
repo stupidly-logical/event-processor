@@ -145,7 +145,7 @@ jobs:
     name: Build Docker Images
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: ${{ github.event_name == 'push' && secrets.DOCKER_REGISTRY != '' }}
+    if: github.event_name == 'push'
 
     outputs:
       producer-image: ${{ steps.docker-build.outputs.producer-image }}
@@ -160,6 +160,7 @@ jobs:
 
       - name: Build Docker images
         id: docker-build
+        if: ${{ secrets.DOCKER_REGISTRY != '' }}
         run: |
           REPO="${{ secrets.DOCKER_REGISTRY }}/event-processor"
           TAG="${{ github.sha }}"
