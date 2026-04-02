@@ -2,9 +2,9 @@ name: CI — Build & Test
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature/event-processor-impl ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, feature/event-processor-impl ]
 
 permissions:
   contents: read
@@ -67,26 +67,23 @@ jobs:
           - 6379:6379
 
       kafka:
-        image: confluentinc/cp-kafka:7.5.0
+        image: bitnami/kafka:3.6
         env:
-          KAFKA_BROKER_ID: 1
-          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-          KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+          KAFKA_CFG_NODE_ID: 0
+          KAFKA_CFG_PROCESS_ROLES: controller,broker
+          KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+          KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+          KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@localhost:9093
+          KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          ALLOW_PLAINTEXT_LISTENER: "yes"
         options: >-
-          --health-cmd "kafka-broker-api-versions.sh --bootstrap-server localhost:9092"
+          --health-cmd "kafka-topics.sh --bootstrap-server localhost:9092 --list"
           --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-timeout 10s
+          --health-retries 10
         ports:
           - 9092:9092
-
-      zookeeper:
-        image: confluentinc/cp-zookeeper:7.5.0
-        env:
-          ZOOKEEPER_CLIENT_PORT: 2181
-        ports:
-          - 2181:2181
 
     steps:
       - name: Checkout code
@@ -100,8 +97,7 @@ jobs:
           cache: maven
 
       - name: Wait for Kafka
-        run: |
-          timeout 120 bash -c 'until docker exec kafka kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1; do sleep 1; done'
+        run: timeout 120 bash -c 'until nc -z localhost 9092; do sleep 1; done'
 
       - name: Run integration tests
         run: mvn verify -B
@@ -135,6 +131,7 @@ jobs:
         run: mvn spotbugs:check -q
 
       - name: SonarQube Scan
+        if: ${{ secrets.SONAR_TOKEN != '' }}
         run: |
           mvn sonar:sonar \
             -Dsonar.projectKey=event-processor \
@@ -143,13 +140,12 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
             -B -q
-        if: secrets.SONAR_TOKEN != ''
 
   docker-build:
     name: Build Docker Images
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name == 'push' && secrets.DOCKER_REGISTRY != ''
+    if: ${{ github.event_name == 'push' && secrets.DOCKER_REGISTRY != '' }}
 
     outputs:
       producer-image: ${{ steps.docker-build.outputs.producer-image }}
