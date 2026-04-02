@@ -135,7 +135,7 @@ public class GitHubEventConsumer {
             // 4. Fan-out to all registered sinks
             boolean anyError = false;
             for (EventSink sink : sinks) {
-                if (!sink.supports(event.getEventType())) continue;
+                if (!sink.supports(event.getEventType())) { continue; }
 
                 try {
                     sink.process(event);
@@ -177,11 +177,11 @@ public class GitHubEventConsumer {
      */
     private Context extractTraceContext(ConsumerRecord<String, byte[]> record) {
         Header header = record.headers().lastHeader("traceparent");
-        if (header == null) return Context.current();
+        if (header == null) { return Context.current(); }
 
         String traceparent = new String(header.value(), StandardCharsets.UTF_8);
         String[] parts = traceparent.split("-");
-        if (parts.length != 4) return Context.current();
+        if (parts.length != 4) { return Context.current(); }
 
         try {
             SpanContext remoteCtx = SpanContext.createFromRemoteParent(

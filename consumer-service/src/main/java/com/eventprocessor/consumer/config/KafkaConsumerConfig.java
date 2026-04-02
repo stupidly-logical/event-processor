@@ -1,7 +1,6 @@
 package com.eventprocessor.consumer.config;
 
 import com.eventprocessor.sdk.dlq.DlqRouter;
-import com.eventprocessor.sdk.model.GitHubEvent;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;

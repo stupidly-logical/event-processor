@@ -158,7 +158,7 @@ public class EventEmissionScheduler {
     // ── Duplicate injection (dev/load-test only) ──────────────────────────────
 
     private GitHubEvent maybeInjectDuplicate(GitHubEvent event) {
-        if (!props.injectDuplicates()) return event;
+        if (!props.injectDuplicates()) { return event; }
 
         // ~5% chance: pick a random recent eventId and stamp it onto this event
         if (Math.random() < 0.05 && recentIds[ringIdx % 20] != null) {

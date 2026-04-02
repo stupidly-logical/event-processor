@@ -129,7 +129,7 @@ public class AnalyticsEventSink implements EventSink {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static int parseIntSafe(String value, int fallback) {
-        if (value == null) return fallback;
+        if (value == null) { return fallback; }
         try { return Integer.parseInt(value.trim()); }
         catch (NumberFormatException e) { return fallback; }
     }

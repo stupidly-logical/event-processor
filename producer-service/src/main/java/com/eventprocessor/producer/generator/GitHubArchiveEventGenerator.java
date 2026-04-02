@@ -94,10 +94,10 @@ public class GitHubArchiveEventGenerator {
     static {
         TYPE_POOL = new EventType[100];
         int i = 0;
-        for (; i < 50; i++) TYPE_POOL[i] = EventType.PUSH_EVENT;
-        for (; i < 75; i++) TYPE_POOL[i] = EventType.WATCH_EVENT;
-        for (; i < 90; i++) TYPE_POOL[i] = EventType.PULL_REQUEST_EVENT;
-        for (; i < 100; i++) TYPE_POOL[i] = EventType.ISSUES_EVENT;
+        for (; i < 50; i++) { TYPE_POOL[i] = EventType.PUSH_EVENT; }
+        for (; i < 75; i++) { TYPE_POOL[i] = EventType.WATCH_EVENT; }
+        for (; i < 90; i++) { TYPE_POOL[i] = EventType.PULL_REQUEST_EVENT; }
+        for (; i < 100; i++) { TYPE_POOL[i] = EventType.ISSUES_EVENT; }
     }
 
     // ── Public API ───────────────────────────────────────────────────────────
@@ -222,7 +222,7 @@ public class GitHubArchiveEventGenerator {
     private static String randomSha(Random rng) {
         char[] hex = "0123456789abcdef".toCharArray();
         char[] sha = new char[40];
-        for (int i = 0; i < 40; i++) sha[i] = hex[rng.nextInt(16)];
+        for (int i = 0; i < 40; i++) { sha[i] = hex[rng.nextInt(16)]; }
         return new String(sha);
     }
 }

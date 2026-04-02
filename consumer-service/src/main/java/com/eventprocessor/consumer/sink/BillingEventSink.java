@@ -1,6 +1,5 @@
 package com.eventprocessor.consumer.sink;
 
-import com.eventprocessor.consumer.config.ConsumerProperties;
 import com.eventprocessor.sdk.model.EventType;
 import com.eventprocessor.sdk.model.GitHubEvent;
 import io.micrometer.core.instrument.Counter;
@@ -86,7 +85,7 @@ public class BillingEventSink implements EventSink {
 
     private void processPullRequest(GitHubEvent event) {
         boolean merged = Boolean.parseBoolean(event.getPayload().getOrDefault("merged", "false"));
-        if (!merged) return;   // only merged PRs incur a CI billing event
+        if (!merged) { return; }   // only merged PRs incur a CI billing event
 
         int additions = parseIntSafe(event.getPayload().get("additions"), 0);
         int deletions = parseIntSafe(event.getPayload().get("deletions"), 0);
@@ -103,7 +102,7 @@ public class BillingEventSink implements EventSink {
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static int parseIntSafe(String value, int fallback) {
-        if (value == null) return fallback;
+        if (value == null) { return fallback; }
         try {
             return Integer.parseInt(value.trim());
         } catch (NumberFormatException e) {

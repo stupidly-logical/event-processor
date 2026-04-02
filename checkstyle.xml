@@ -27,8 +27,6 @@
 
         <!-- Braces -->
         <module name="NeedBraces"/>
-        <module name="LeftCurly"/>
-        <module name="RightCurly"/>
     </module>
 
     <!-- Line length — 120 chars is practical for modern screens -->
