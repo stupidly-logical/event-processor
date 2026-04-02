@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: producer-service
+  profiles:
+    include: sdk
+
+  # Kafka (overrides sdk defaults if env vars are set)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+
+  # Redis
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  # PostgreSQL
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:eventprocessor}
+    username: ${POSTGRES_USER:ep_user}
+    password: ${POSTGRES_PASSWORD:ep_secret}
+
+server:
+  port: ${SERVER_PORT:8081}
+
+# ── Producer-specific knobs ──────────────────────────────────────────────────
+producer:
+  emission:
+    topic:                  ${PRODUCER_TOPIC:github-events}
+    rate-per-second:        ${PRODUCER_RATE_PER_SECOND:50}
+    enabled:                ${PRODUCER_ENABLED:true}
+    max-consecutive-failures: ${PRODUCER_MAX_FAILURES:5}
+    inject-duplicates:      ${PRODUCER_INJECT_DUPLICATES:false}
+    tick-ms:                ${PRODUCER_TICK_MS:1000}
+
+# ── Observability ────────────────────────────────────────────────────────────
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8091}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,circuitbreakers,loggers,env
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: producer-service
+      env: ${ENV:local}
+
+# ── OpenTelemetry ────────────────────────────────────────────────────────────
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  service:
+    name: producer-service
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.eventprocessor: ${LOG_LEVEL:INFO}
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} traceId=%X{traceId} spanId=%X{spanId} - %msg%n"

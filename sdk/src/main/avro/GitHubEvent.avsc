@@ -1,0 +1,66 @@
+{
+  "namespace": "com.eventprocessor.sdk.model",
+  "type": "record",
+  "name": "GitHubEvent",
+  "doc": "Canonical envelope for GitHub Archive events streamed through the pipeline.",
+  "fields": [
+    {
+      "name": "eventId",
+      "type": "string",
+      "doc": "Globally unique event ID (UUID v4). Used as the Redis dedup key."
+    },
+    {
+      "name": "eventType",
+      "type": {
+        "type": "enum",
+        "name": "EventType",
+        "symbols": ["PUSH_EVENT", "PULL_REQUEST_EVENT", "ISSUES_EVENT", "WATCH_EVENT"]
+      },
+      "doc": "GitHub Archive event type discriminator."
+    },
+    {
+      "name": "repoId",
+      "type": "long",
+      "doc": "GitHub repository ID."
+    },
+    {
+      "name": "repoName",
+      "type": "string",
+      "doc": "Full repo name, e.g. octocat/Hello-World."
+    },
+    {
+      "name": "actorLogin",
+      "type": "string",
+      "doc": "GitHub username of the actor who triggered the event."
+    },
+    {
+      "name": "occurredAt",
+      "type": {
+        "type": "long",
+        "logicalType": "timestamp-millis"
+      },
+      "doc": "Event creation time as epoch millis (UTC)."
+    },
+    {
+      "name": "payload",
+      "type": {
+        "type": "map",
+        "values": "string"
+      },
+      "doc": "Event-type-specific payload flattened to string key-value pairs.",
+      "default": {}
+    },
+    {
+      "name": "traceId",
+      "type": ["null", "string"],
+      "doc": "W3C traceparent propagated from the producer for async boundary correlation.",
+      "default": null
+    },
+    {
+      "name": "schemaVersion",
+      "type": "int",
+      "doc": "Avro schema version for forward-compatibility checks.",
+      "default": 1
+    }
+  ]
+}

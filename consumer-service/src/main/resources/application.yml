@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: consumer-service
+  profiles:
+    include: sdk
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:19092}
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:eventprocessor}
+    username: ${POSTGRES_USER:ep_user}
+    password: ${POSTGRES_PASSWORD:ep_secret}
+
+server:
+  port: ${SERVER_PORT:8082}
+
+# ── Consumer-specific knobs ──────────────────────────────────────────────────
+consumer:
+  kafka:
+    group-id:    ${CONSUMER_GROUP_ID:consumer-service-group}
+    topic:       ${CONSUMER_TOPIC:github-events}
+    concurrency: ${CONSUMER_CONCURRENCY:3}
+
+  dedup:
+    window-seconds: ${CONSUMER_DEDUP_WINDOW_SECONDS:120}
+    key-prefix:     ${CONSUMER_DEDUP_KEY_PREFIX:consumer-dedup:}
+
+  sinks:
+    billing:
+      enabled: ${CONSUMER_SINK_BILLING_ENABLED:true}
+    audit:
+      enabled: ${CONSUMER_SINK_AUDIT_ENABLED:true}
+    analytics:
+      enabled: ${CONSUMER_SINK_ANALYTICS_ENABLED:true}
+
+# ── Observability ────────────────────────────────────────────────────────────
+management:
+  server:
+    port: ${MANAGEMENT_PORT:8092}
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,circuitbreakers,loggers
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: consumer-service
+      env: ${ENV:local}
+
+# ── OpenTelemetry ────────────────────────────────────────────────────────────
+otel:
+  exporter:
+    otlp:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+  service:
+    name: consumer-service
+
+# ── Logging ──────────────────────────────────────────────────────────────────
+logging:
+  level:
+    com.eventprocessor: ${LOG_LEVEL:INFO}
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} traceId=%X{traceId} spanId=%X{spanId} - %msg%n"
