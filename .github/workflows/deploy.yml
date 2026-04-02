@@ -89,7 +89,7 @@ jobs:
           cache: maven
 
       - name: Build artifacts
-        run: mvn clean package -Pprod -DskipTests -q
+        run: mvn clean package -DskipTests -q
 
       - name: Build and push Docker images
         id: docker
