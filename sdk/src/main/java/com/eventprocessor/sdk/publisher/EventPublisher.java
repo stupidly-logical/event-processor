@@ -12,7 +12,6 @@ import io.opentelemetry.api.GlobalOpenTelemetry;
 import io.opentelemetry.api.trace.Span;
 import io.opentelemetry.api.trace.StatusCode;
 import io.opentelemetry.api.trace.Tracer;
-import io.opentelemetry.context.Context;
 import org.apache.avro.io.DatumWriter;
 import org.apache.avro.io.EncoderFactory;
 import org.apache.avro.specific.SpecificDatumWriter;
@@ -134,7 +133,8 @@ public class EventPublisher {
                 publishedCounter.increment();
                 log.debug("Published eventId={} topic={} offset={}",
                         event.getEventId(), topic,
-                        result.getRecordMetadata().offset());
+                        result.getRecordMetadata() != null
+                                ? result.getRecordMetadata().offset() : -1);
                 return null;
             });
 

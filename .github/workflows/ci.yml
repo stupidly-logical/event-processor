@@ -59,7 +59,7 @@ jobs:
       redis:
         image: redis:7-alpine
         options: >-
-          --health-cmd='redis-cli ping'
+          --health-cmd "redis-cli ping"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -78,7 +78,7 @@ jobs:
           KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
           ALLOW_PLAINTEXT_LISTENER: "yes"
         options: >-
-          --health-cmd='/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list'
+          --health-cmd "/opt/bitnami/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"
           --health-interval 10s
           --health-timeout 10s
           --health-retries 10
