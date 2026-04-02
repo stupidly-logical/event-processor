@@ -1,0 +1,519 @@
+{
+  "id": null,
+  "uid": "event-processor-main",
+  "title": "Event Processor — Pipeline Overview",
+  "description": "End-to-end observability: throughput, dedup, circuit breaker, DLQ, latency and sink health.",
+  "tags": ["event-processor", "kafka", "redis", "dlq"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": { "from": "now-30m", "to": "now" },
+  "timepicker": {},
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "panels": [
+
+    { "id": 100, "type": "row", "title": "KPI Overview", "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 } },
+
+    {
+      "id": 1, "type": "stat", "title": "Events Published / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 1, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(ep_events_published_total[1m]))",
+        "legendFormat": "published/s", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto",
+        "textMode": "auto", "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "decimals": 1,
+        "thresholds": { "mode": "absolute",
+          "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 30 }, { "color": "red", "value": 0.1 }]
+        },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 2, "type": "stat", "title": "Events Consumed / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 4, "y": 1, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(ep_consumer_consumed_total[1m]))",
+        "legendFormat": "consumed/s", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "decimals": 1,
+        "thresholds": { "mode": "absolute",
+          "steps": [{ "color": "green", "value": null }]
+        },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 3, "type": "stat", "title": "Producer Dedup Hit Rate",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 1, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(ep_dedup_hit_total[5m])) / (sum(rate(ep_dedup_hit_total[5m])) + sum(rate(ep_dedup_miss_total[5m]))) * 100",
+        "legendFormat": "hit %", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": {
+        "unit": "percent", "decimals": 2, "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute",
+          "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }]
+        },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 4, "type": "stat", "title": "DLQ Pending (lifetime routed)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 1, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(increase(ep_dlq_routed_total[1h])) - sum(increase(ep_dlq_replayed_total[1h]))",
+        "legendFormat": "pending", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "decimals": 0,
+        "thresholds": { "mode": "absolute",
+          "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 10 }]
+        },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 5, "type": "stat", "title": "Circuit Breaker State",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 1, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "resilience4j_circuitbreaker_state{name=\"kafka-publish\"}",
+        "legendFormat": "{{state}}", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background",
+        "textMode": "value_and_name" },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "decimals": 0,
+        "mappings": [
+          { "type": "value", "options": { "0": { "text": "CLOSED", "color": "green", "index": 0 }, "1": { "text": "OPEN", "color": "red", "index": 1 }, "2": { "text": "HALF-OPEN", "color": "yellow", "index": 2 } } }
+        ],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 2 }] },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 6, "type": "stat", "title": "Sink Error Rate / s",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 20, "y": 1, "w": 4, "h": 4 },
+      "targets": [{
+        "expr": "sum(rate(ep_consumer_sink_errors_total[5m]))",
+        "legendFormat": "errors/s", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "graphMode": "area" },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "decimals": 3,
+        "thresholds": { "mode": "absolute",
+          "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 0.01 }, { "color": "red", "value": 0.1 }]
+        },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    { "id": 101, "type": "row", "title": "Throughput", "collapsed": false,
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 } },
+
+    {
+      "id": 10, "type": "timeseries", "title": "Event Publish Rate by Type",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(ep_analytics_events_total{event_type=\"PUSH_EVENT\"}[1m])", "legendFormat": "PushEvent", "refId": "A" },
+        { "expr": "rate(ep_analytics_events_total{event_type=\"PULL_REQUEST_EVENT\"}[1m])", "legendFormat": "PullRequestEvent", "refId": "B" },
+        { "expr": "rate(ep_analytics_events_total{event_type=\"ISSUES_EVENT\"}[1m])", "legendFormat": "IssuesEvent", "refId": "C" },
+        { "expr": "rate(ep_analytics_events_total{event_type=\"WATCH_EVENT\"}[1m])", "legendFormat": "WatchEvent", "refId": "D" }
+      ],
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "PushEvent" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] },
+        { "matcher": { "id": "byName", "options": "PullRequestEvent" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "IssuesEvent" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+        { "matcher": { "id": "byName", "options": "WatchEvent" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }] }
+      ] }
+    },
+
+    {
+      "id": 11, "type": "timeseries", "title": "Consumer Throughput vs Producer",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 6, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ep_events_published_total[1m]))", "legendFormat": "Published", "refId": "A" },
+        { "expr": "sum(rate(ep_consumer_consumed_total[1m]))", "legendFormat": "Consumed", "refId": "B" },
+        { "expr": "sum(rate(ep_consumer_dedup_dropped_total[1m]))", "legendFormat": "Consumer Dedup Dropped", "refId": "C" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Published" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] },
+        { "matcher": { "id": "byName", "options": "Consumed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "Consumer Dedup Dropped" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }, { "id": "custom.lineStyle", "value": { "fill": "dash" } }] }
+      ] }
+    },
+
+    { "id": 102, "type": "row", "title": "Deduplication", "collapsed": false,
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 } },
+
+    {
+      "id": 20, "type": "timeseries", "title": "Producer Dedup — Hit vs Miss Rate",
+      "description": "Redis SET NX, 300 s TTL. Hits = duplicate suppression.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 15, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ep_dedup_miss_total[1m]))", "legendFormat": "New (miss)", "refId": "A" },
+        { "expr": "sum(rate(ep_dedup_hit_total[1m]))", "legendFormat": "Duplicate (hit)", "refId": "B" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 15, "stacking": { "mode": "normal" } }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "New (miss)" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "Duplicate (hit)" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] }
+    },
+
+    {
+      "id": 21, "type": "timeseries", "title": "Consumer Dedup — Hit vs Miss Rate",
+      "description": "Redis SET NX, 120 s window. Hits = at-least-once re-delivery after rebalance.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 15, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ep_consumer_dedup_miss_total[1m]))", "legendFormat": "New (miss)", "refId": "A" },
+        { "expr": "sum(rate(ep_consumer_dedup_hit_total[1m]))", "legendFormat": "Duplicate (hit)", "refId": "B" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 15, "stacking": { "mode": "normal" } }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "New (miss)" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "Duplicate (hit)" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
+      ] }
+    },
+
+    {
+      "id": 22, "type": "gauge", "title": "Producer Dedup Hit % (5 m)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 15, "w": 8, "h": 8 },
+      "targets": [{
+        "expr": "100 * sum(rate(ep_dedup_hit_total[5m])) / (sum(rate(ep_dedup_hit_total[5m])) + sum(rate(ep_dedup_miss_total[5m])))",
+        "legendFormat": "hit %", "refId": "A"
+      }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "showThresholdLabels": false, "showThresholdMarkers": true },
+      "fieldConfig": { "defaults": {
+        "unit": "percent", "min": 0, "max": 20,
+        "thresholds": { "mode": "absolute",
+          "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 5 }, { "color": "red", "value": 10 }]
+        },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    { "id": 103, "type": "row", "title": "Circuit Breaker — kafka-publish", "collapsed": false,
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 } },
+
+    {
+      "id": 30, "type": "state-timeline", "title": "Circuit Breaker State Timeline",
+      "description": "0 = CLOSED, 1 = OPEN, 2 = HALF-OPEN. Count-based window 20, threshold 50%, wait 30 s, 3 probes.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 24, "w": 12, "h": 8 },
+      "targets": [{
+        "expr": "resilience4j_circuitbreaker_state{name=\"kafka-publish\"}",
+        "legendFormat": "{{state}}", "refId": "A"
+      }],
+      "options": { "mergeValues": true, "showValue": "auto", "alignValue": "center", "rowHeight": 0.9,
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": { "defaults": {
+        "custom": { "lineWidth": 0, "fillOpacity": 100 },
+        "mappings": [
+          { "type": "value", "options": { "0": { "text": "CLOSED", "color": "green", "index": 0 }, "1": { "text": "OPEN", "color": "red", "index": 1 }, "2": { "text": "HALF-OPEN", "color": "yellow", "index": 2 } } }
+        ],
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 2 }] },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 31, "type": "timeseries", "title": "CB Failure Rate % + Call Counts",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 24, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "resilience4j_circuitbreaker_failure_rate{name=\"kafka-publish\"}", "legendFormat": "Failure Rate %", "refId": "A" },
+        { "expr": "rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"kafka-publish\",kind=\"successful\"}[1m]) * 60", "legendFormat": "Successful / min", "refId": "B" },
+        { "expr": "rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"kafka-publish\",kind=\"failed\"}[1m]) * 60", "legendFormat": "Failed / min", "refId": "C" },
+        { "expr": "rate(resilience4j_circuitbreaker_calls_seconds_count{name=\"kafka-publish\",kind=\"not_permitted\"}[1m]) * 60", "legendFormat": "Not Permitted / min", "refId": "D" }
+      ],
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Failure Rate %" }, "properties": [
+          { "id": "unit", "value": "percent" },
+          { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } },
+          { "id": "custom.axisPlacement", "value": "right" },
+          { "id": "custom.axisSoftMax", "value": 100 }
+        ]},
+        { "matcher": { "id": "byName", "options": "Successful / min" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "Failed / min" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+        { "matcher": { "id": "byName", "options": "Not Permitted / min" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }, { "id": "custom.lineStyle", "value": { "fill": "dash" } }] }
+      ] }
+    },
+
+    { "id": 104, "type": "row", "title": "Dead Letter Queue", "collapsed": false,
+      "gridPos": { "x": 0, "y": 32, "w": 24, "h": 1 } },
+
+    {
+      "id": 40, "type": "timeseries", "title": "DLQ Event Rates — Routed / Replayed / Dead",
+      "description": "Routed = new DLQ entries. Replayed = successfully re-published. Dead = exceeded MAX_RETRIES (5).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 33, "w": 14, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ep_dlq_routed_total[1m]))", "legendFormat": "Routed", "refId": "A" },
+        { "expr": "sum(rate(ep_dlq_replayed_total[1m]))", "legendFormat": "Replayed", "refId": "B" },
+        { "expr": "sum(rate(ep_dlq_dead_total[1m]))", "legendFormat": "Dead", "refId": "C" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Routed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+        { "matcher": { "id": "byName", "options": "Replayed" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "Dead" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }, { "id": "custom.lineWidth", "value": 3 }] }
+      ] }
+    },
+
+    {
+      "id": 41, "type": "stat", "title": "DLQ Dead Events (all-time)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 14, "y": 33, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(ep_dlq_dead_total)", "legendFormat": "dead", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 42, "type": "stat", "title": "Replayer Batch Efficiency",
+      "description": "(replayed / routed) over last 5 min. 100% = all DLQ events successfully re-published.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 19, "y": 33, "w": 5, "h": 4 },
+      "targets": [{ "expr": "100 * sum(rate(ep_dlq_replayed_total[5m])) / clamp_min(sum(rate(ep_dlq_routed_total[5m])), 0.001)", "legendFormat": "efficiency %", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": {
+        "unit": "percent", "decimals": 1, "min": 0, "max": 100,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 50 }, { "color": "green", "value": 90 }] },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 43, "type": "stat", "title": "DLQ Routed (all-time)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 14, "y": 37, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(ep_dlq_routed_total)", "legendFormat": "routed", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 10 }] },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 44, "type": "stat", "title": "DLQ Replayed (all-time)",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 19, "y": 37, "w": 5, "h": 4 },
+      "targets": [{ "expr": "sum(ep_dlq_replayed_total)", "legendFormat": "replayed", "refId": "A" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "decimals": 0,
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }] },
+        "color": { "mode": "thresholds" }
+      }, "overrides": [] }
+    },
+
+    { "id": 105, "type": "row", "title": "Latency", "collapsed": false,
+      "gridPos": { "x": 0, "y": 41, "w": 24, "h": 1 } },
+
+    {
+      "id": 50, "type": "timeseries", "title": "Publish Latency — p50 / p95 / p99",
+      "description": "End-to-end from EventPublisher.publish() call through Redis dedup + CB + Kafka send ACK.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 42, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(ep_events_publish_duration_seconds_bucket[1m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(ep_events_publish_duration_seconds_bucket[1m])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(ep_events_publish_duration_seconds_bucket[1m])) by (le))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true },
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 5 }] }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
+        { "matcher": { "id": "byName", "options": "p99" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] }
+    },
+
+    {
+      "id": 51, "type": "timeseries", "title": "Consume Latency — p50 / p95 / p99",
+      "description": "Time from Kafka record received to all sinks processed and offset committed.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 42, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(ep_consumer_process_duration_seconds_bucket[1m])) by (le))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(ep_consumer_process_duration_seconds_bucket[1m])) by (le))", "legendFormat": "p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum(rate(ep_consumer_process_duration_seconds_bucket[1m])) by (le))", "legendFormat": "p99", "refId": "C" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "s", "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "p50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+        { "matcher": { "id": "byName", "options": "p95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }] },
+        { "matcher": { "id": "byName", "options": "p99" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] }
+    },
+
+    { "id": 106, "type": "row", "title": "Sinks — Billing & Analytics", "collapsed": false,
+      "gridPos": { "x": 0, "y": 50, "w": 24, "h": 1 } },
+
+    {
+      "id": 60, "type": "timeseries", "title": "Billing — Push Events & Merged PRs",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 51, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ep_billing_push_billed_total[1m]))", "legendFormat": "Push Events / s", "refId": "A" },
+        { "expr": "sum(rate(ep_billing_pr_merged_billed_total[1m]))", "legendFormat": "PR Merged / s", "refId": "B" },
+        { "expr": "sum(rate(ep_billing_commits_total[1m]))", "legendFormat": "Commits / s", "refId": "C" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Commits / s" }, "properties": [{ "id": "custom.axisPlacement", "value": "right" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "purple" } }] }
+      ] }
+    },
+
+    {
+      "id": 61, "type": "timeseries", "title": "Analytics — Events by Type",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 8, "y": 51, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "sum by (event_type) (rate(ep_analytics_events_total[1m]))", "legendFormat": "{{event_type}}", "refId": "A" }
+      ],
+      "options": { "tooltip": { "mode": "multi", "sort": "desc" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 10, "spanNulls": true, "stacking": { "mode": "normal" } }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 62, "type": "timeseries", "title": "Analytics — Push Commit Size p50 / p95",
+      "description": "Distribution of commit count per PushEvent. p95 spike = large batch pushes.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 16, "y": 51, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum(rate(ep_analytics_push_commits_bucket[5m])) by (le))", "legendFormat": "commit size p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum(rate(ep_analytics_push_commits_bucket[5m])) by (le))", "legendFormat": "commit size p95", "refId": "B" },
+        { "expr": "histogram_quantile(0.50, sum(rate(ep_analytics_pr_changes_bucket[5m])) by (le))", "legendFormat": "PR changes p50", "refId": "C" },
+        { "expr": "histogram_quantile(0.95, sum(rate(ep_analytics_pr_changes_bucket[5m])) by (le))", "legendFormat": "PR changes p95", "refId": "D" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "decimals": 1, "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byRegexp", "options": "^PR changes.*" }, "properties": [{ "id": "custom.axisPlacement", "value": "right" }] }
+      ] }
+    },
+
+    {
+      "id": 63, "type": "timeseries", "title": "Sink Error Rate by Sink",
+      "description": "Individual sink failures. Non-zero = one or more events partially delivered (other sinks may have succeeded).",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 0, "y": 59, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "sum(rate(ep_consumer_sink_errors_total[1m]))", "legendFormat": "Total sink errors / s", "refId": "A" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "list", "placement": "bottom" } },
+      "fieldConfig": { "defaults": {
+        "unit": "reqps", "custom": { "lineWidth": 2, "fillOpacity": 20, "spanNulls": true },
+        "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.001 }] },
+        "color": { "mode": "fixed", "fixedColor": "red" }
+      }, "overrides": [] }
+    },
+
+    {
+      "id": 64, "type": "timeseries", "title": "Producer Tick Health",
+      "description": "Skipped ticks signal back-pressure or CB open state. Healthy systems show 0 skipped.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "x": 12, "y": 59, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(ep_producer_ticks_total[1m]) * 60", "legendFormat": "Ticks / min", "refId": "A" },
+        { "expr": "rate(ep_producer_ticks_skipped_total[1m]) * 60", "legendFormat": "Skipped ticks / min", "refId": "B" },
+        { "expr": "ep_producer_total_emitted", "legendFormat": "Cumulative emitted", "refId": "C" }
+      ],
+      "options": { "tooltip": { "mode": "multi" }, "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": {
+        "unit": "short", "custom": { "lineWidth": 2, "fillOpacity": 8, "spanNulls": true }
+      }, "overrides": [
+        { "matcher": { "id": "byName", "options": "Cumulative emitted" }, "properties": [{ "id": "custom.axisPlacement", "value": "right" }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] },
+        { "matcher": { "id": "byName", "options": "Skipped ticks / min" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+      ] }
+    }
+
+  ],
+
+  "templating": { "list": [
+    {
+      "name": "application",
+      "type": "query",
+      "label": "Application",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "query": "label_values(up, application)",
+      "refresh": 2,
+      "multi": true,
+      "includeAll": true,
+      "current": { "text": "All", "value": "$__all" },
+      "hide": 0
+    }
+  ]},
+
+  "annotations": { "list": [
+    {
+      "name": "CB Transitions",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "enable": true,
+      "hide": false,
+      "iconColor": "red",
+      "expr": "changes(resilience4j_circuitbreaker_state{name=\"kafka-publish\"}[1m]) > 0",
+      "titleFormat": "CB State Changed",
+      "textFormat": "Circuit breaker kafka-publish changed state"
+    }
+  ]}
+}

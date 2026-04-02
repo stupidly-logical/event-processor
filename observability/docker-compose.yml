@@ -1,0 +1,175 @@
+version: "3.9"
+
+# ── Networking ────────────────────────────────────────────────────────────────
+networks:
+  eventnet:
+    driver: bridge
+
+# ── Persistent volumes ────────────────────────────────────────────────────────
+volumes:
+  postgres_data:
+  redis_data:
+  redpanda_data:
+  grafana_data:
+
+services:
+
+  # ── Redis 7 ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: ep-redis
+    command: >
+      redis-server
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
+      --save ""
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - eventnet
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ── PostgreSQL 16 (DLQ store) ────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: ep-postgres
+    environment:
+      POSTGRES_DB: eventprocessor
+      POSTGRES_USER: ep_user
+      POSTGRES_PASSWORD: ep_secret
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - eventnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ep_user -d eventprocessor"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ── Redpanda (Kafka-compatible broker) ──────────────────────────────────────
+  redpanda:
+    image: redpandadata/redpanda:v24.1.8
+    container_name: ep-redpanda
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --overprovisioned
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://redpanda:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+    ports:
+      - "19092:19092"   # external Kafka
+      - "18081:18081"   # Schema Registry
+      - "18082:18082"   # Pandaproxy HTTP
+      - "19644:9644"    # Admin / Prometheus metrics
+    volumes:
+      - redpanda_data:/var/lib/redpanda/data
+    networks:
+      - eventnet
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -E 'Healthy:.+true'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ── Redpanda Console ────────────────────────────────────────────────────────
+  redpanda-console:
+    image: redpandadata/console:v2.6.0
+    container_name: ep-redpanda-console
+    environment:
+      CONFIG_FILEPATH: /etc/redpanda/console-config.yaml
+    volumes:
+      - ./redpanda-console-config.yaml:/etc/redpanda/console-config.yaml:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - eventnet
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
+  # ── OpenTelemetry Collector ──────────────────────────────────────────────────
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.102.0
+    container_name: ep-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus scrape endpoint
+    networks:
+      - eventnet
+    depends_on:
+      - jaeger
+
+  # ── Jaeger (all-in-one) ──────────────────────────────────────────────────────
+  jaeger:
+    image: jaegertracing/all-in-one:1.58
+    container_name: ep-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # UI
+      - "14250:14250"   # gRPC model
+      - "14268:14268"   # HTTP collector
+    networks:
+      - eventnet
+
+  # ── Prometheus ───────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: ep-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+      # Stores exemplars (traceId → Jaeger links) alongside metrics
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - eventnet
+
+  # ── Grafana ──────────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.4
+    container_name: ep-grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # Enable TraceQL editor + exemplar → trace linking from Prometheus panels
+      GF_FEATURE_TOGGLES_ENABLE: "traceqlEditor,traceToMetrics"
+      GF_EXPLORE_ENABLED: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_LOG_LEVEL: warn
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - eventnet
+    depends_on:
+      - prometheus
+      - jaeger
