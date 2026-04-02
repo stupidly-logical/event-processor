@@ -149,7 +149,7 @@ jobs:
     name: Build Docker Images
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && secrets.DOCKER_REGISTRY != ''
 
     outputs:
       producer-image: ${{ steps.docker-build.outputs.producer-image }}
@@ -173,4 +173,3 @@ jobs:
 
           echo "producer-image=$REPO/producer:$TAG" >> $GITHUB_OUTPUT
           echo "consumer-image=$REPO/consumer:$TAG" >> $GITHUB_OUTPUT
-        if: secrets.DOCKER_REGISTRY != ''
