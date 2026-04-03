@@ -93,7 +93,9 @@ public class DlqReplayer {
         }
 
         var batch = repository.findOldestPending(BATCH_SIZE);
-        if (batch.isEmpty()) return;
+        if (batch.isEmpty()) {
+            return;
+        }
 
         log.info("DlqReplayer processing batch size={}", batch.size());
 

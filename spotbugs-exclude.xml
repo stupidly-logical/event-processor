@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FindBugsFilter>
+  <Match>
+    <Class name="com.eventprocessor.sdk.dedup.RedisDeduplicator"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+  <Match>
+    <Class name="com.eventprocessor.sdk.dlq.DlqReplayer"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+  <Match>
+    <Class name="com.eventprocessor.sdk.publisher.EventPublisher"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+  <Match>
+    <Class name="com.eventprocessor.consumer.dedup.WindowedDeduplicator"/>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+  <Match>
+    <Class name="~com\.eventprocessor\.sdk\.model\.GitHubEvent(\$.*)?"/>
+    <Bug pattern="EI_EXPOSE_REP,EI_EXPOSE_REP2,MS_EXPOSE_REP"/>
+  </Match>
+</FindBugsFilter>

@@ -16,7 +16,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.time.Instant;
 
 /**
  * Routes a failed {@link GitHubEvent} to the PostgreSQL DLQ.

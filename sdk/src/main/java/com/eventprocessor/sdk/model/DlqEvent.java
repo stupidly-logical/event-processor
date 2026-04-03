@@ -1,8 +1,17 @@
 package com.eventprocessor.sdk.model;
 
-import jakarta.persistence.*;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+
+import java.util.Arrays;
 import java.time.Instant;
 
 /**
@@ -53,14 +62,14 @@ public class DlqEvent {
     @Column(name = "original_occurred_at", nullable = false)
     private Instant originalOccurredAt;
 
-    protected DlqEvent() {}
+    protected DlqEvent() { }
 
     public DlqEvent(String eventId, String eventType, String topic, byte[] payload,
                     String traceContext, String failureReason, Instant originalOccurredAt) {
         this.eventId = eventId;
         this.eventType = eventType;
         this.topic = topic;
-        this.payload = payload;
+        this.payload = payload != null ? Arrays.copyOf(payload, payload.length) : null;
         this.traceContext = traceContext;
         this.failureReason = failureReason;
         this.originalOccurredAt = originalOccurredAt;
@@ -72,7 +81,7 @@ public class DlqEvent {
     public String getEventId() { return eventId; }
     public String getEventType() { return eventType; }
     public String getTopic() { return topic; }
-    public byte[] getPayload() { return payload; }
+    public byte[] getPayload() { return payload != null ? Arrays.copyOf(payload, payload.length) : null; }
     public String getTraceContext() { return traceContext; }
     public String getFailureReason() { return failureReason; }
     public int getRetryCount() { return retryCount; }
