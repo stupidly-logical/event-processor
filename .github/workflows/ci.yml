@@ -133,7 +133,7 @@ jobs:
         run: mvn checkstyle:check -q
 
       - name: Run spotbugs
-        run: mvn com.github.spotbugs:spotbugs-maven-plugin:4.8.6.2:check -q
+        run: mvn -pl sdk,producer-service,consumer-service -am compile com.github.spotbugs:spotbugs-maven-plugin:4.8.6.2:check -q
 
       - name: SonarQube Scan
         continue-on-error: true

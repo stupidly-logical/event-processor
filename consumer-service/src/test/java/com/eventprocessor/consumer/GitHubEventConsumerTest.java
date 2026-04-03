@@ -44,11 +44,6 @@ class GitHubEventConsumerTest {
 
     @BeforeEach
     void setUp() throws IOException {
-        when(sinkA.name()).thenReturn("sinkA");
-        when(sinkB.name()).thenReturn("sinkB");
-        when(sinkA.supports(any())).thenReturn(true);
-        when(sinkB.supports(any())).thenReturn(true);
-
         consumer = new GitHubEventConsumer(deduplicator, List.of(sinkA, sinkB),
                 new SimpleMeterRegistry());
 
@@ -72,6 +67,8 @@ class GitHubEventConsumerTest {
     @Test
     void consume_newEvent_fansOutToAllSinks() {
         when(deduplicator.isNew(event.getEventId())).thenReturn(true);
+        when(sinkA.supports(any())).thenReturn(true);
+        when(sinkB.supports(any())).thenReturn(true);
 
         consumer.consume(record(avroBytes), ack);
 
@@ -95,6 +92,9 @@ class GitHubEventConsumerTest {
     @Test
     void consume_sinkAThrows_sinkBStillRuns() {
         when(deduplicator.isNew(any())).thenReturn(true);
+        when(sinkA.name()).thenReturn("sinkA");
+        when(sinkA.supports(any())).thenReturn(true);
+        when(sinkB.supports(any())).thenReturn(true);
         doThrow(new RuntimeException("sinkA exploded")).when(sinkA).process(any());
 
         consumer.consume(record(avroBytes), ack);
@@ -106,6 +106,10 @@ class GitHubEventConsumerTest {
     @Test
     void consume_bothSinksThrow_offsetStillCommitted() {
         when(deduplicator.isNew(any())).thenReturn(true);
+        when(sinkA.name()).thenReturn("sinkA");
+        when(sinkB.name()).thenReturn("sinkB");
+        when(sinkA.supports(any())).thenReturn(true);
+        when(sinkB.supports(any())).thenReturn(true);
         doThrow(new RuntimeException("A down")).when(sinkA).process(any());
         doThrow(new RuntimeException("B down")).when(sinkB).process(any());
 
@@ -119,6 +123,7 @@ class GitHubEventConsumerTest {
     @Test
     void consume_sinkDoesNotSupportType_sinkSkipped() {
         when(deduplicator.isNew(any())).thenReturn(true);
+        when(sinkB.supports(any())).thenReturn(true);
         when(sinkA.supports(EventType.PUSH_EVENT)).thenReturn(false);
 
         consumer.consume(record(avroBytes), ack);
@@ -132,6 +137,8 @@ class GitHubEventConsumerTest {
     @Test
     void consume_withValidTraceparentHeader_processesNormally() {
         when(deduplicator.isNew(any())).thenReturn(true);
+        when(sinkA.supports(any())).thenReturn(true);
+        when(sinkB.supports(any())).thenReturn(true);
 
         String traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
         RecordHeaders headers = new RecordHeaders();
@@ -146,6 +153,8 @@ class GitHubEventConsumerTest {
     @Test
     void consume_withMalformedTraceparentHeader_degradesGracefully() {
         when(deduplicator.isNew(any())).thenReturn(true);
+        when(sinkA.supports(any())).thenReturn(true);
+        when(sinkB.supports(any())).thenReturn(true);
 
         RecordHeaders headers = new RecordHeaders();
         headers.add("traceparent", "not-a-valid-traceparent".getBytes(StandardCharsets.UTF_8));

@@ -108,6 +108,7 @@ public class GitHubEventConsumer {
     private void doConsume(ConsumerRecord<String, byte[]> record, Acknowledgment ack) {
         // 1. Deserialize — if this throws, the error handler retries / routes to DLQ
         GitHubEvent event = deserialize(record.value());
+        boolean acknowledged = false;
 
         // 2. Restore trace context from the W3C traceparent header
         Context parentContext = extractTraceContext(record);
@@ -129,6 +130,7 @@ public class GitHubEventConsumer {
                 log.debug("Consumer dedup drop: eventId={} partition={} offset={}",
                         event.getEventId(), record.partition(), record.offset());
                 ack.acknowledge();  // must ack duplicates or the offset stalls
+                acknowledged = true;
                 return;
             }
 
@@ -161,7 +163,9 @@ public class GitHubEventConsumer {
             // 5. Manual ACK — commit the offset regardless of sink errors.
             //    A sink failure is not a reason to reprocess — the DLQ handles
             //    persistent failures at the Kafka level via the error handler.
-            ack.acknowledge();
+            if (!acknowledged) {
+                ack.acknowledge();
+            }
             span.end();
         }
     }
