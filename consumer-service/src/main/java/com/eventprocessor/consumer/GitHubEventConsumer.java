@@ -70,7 +70,7 @@ public class GitHubEventConsumer {
                                List<EventSink> sinks,
                                MeterRegistry meterRegistry) {
         this.deduplicator = deduplicator;
-        this.sinks = sinks;
+        this.sinks = List.copyOf(sinks);
         this.tracer = GlobalOpenTelemetry.getTracer("consumer-service", "1.0.0");
 
         this.consumedCounter = Counter.builder("ep.consumer.consumed")
