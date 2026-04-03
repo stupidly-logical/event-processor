@@ -23,7 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Uses a real Redis container via Testcontainers.
  */
 @SpringBootTest(classes = DedupTestConfig.class)
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class RedisDeduplicatorTest {
 
     @Container
