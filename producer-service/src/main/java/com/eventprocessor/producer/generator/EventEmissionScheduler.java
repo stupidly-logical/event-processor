@@ -17,6 +17,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -159,10 +160,11 @@ public class EventEmissionScheduler {
 
     private GitHubEvent maybeInjectDuplicate(GitHubEvent event) {
         if (!props.injectDuplicates()) { return event; }
+        ThreadLocalRandom random = ThreadLocalRandom.current();
 
         // ~5% chance: pick a random recent eventId and stamp it onto this event
-        if (Math.random() < 0.05 && recentIds[ringIdx % 20] != null) {
-            String existingId = recentIds[(int) (Math.random() * 20)];
+        if (random.nextDouble() < 0.05 && recentIds[ringIdx % 20] != null) {
+            String existingId = recentIds[random.nextInt(20)];
             if (existingId != null) {
                 return GitHubEvent.newBuilder(event)
                         .setEventId(existingId)
